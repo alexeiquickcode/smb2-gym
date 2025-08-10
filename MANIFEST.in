@@ -1,0 +1,4 @@
+include README.md
+include LICENSE
+recursive-include smb2_gym *.py
+recursive-include smb2_gym/_nes *.whl *.nes *.sav
