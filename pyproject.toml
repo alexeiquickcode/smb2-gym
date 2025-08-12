@@ -13,7 +13,7 @@ smb2_gym = ["_nes/**/*"]
 
 [project]
 name = "smb2-gym"
-version = "0.1.4"
+version = "0.1.5"
 authors = [{ name = "Alexei Quick" }]
 description = "Super Mario Bros 2 (Europe) Gymnasium Environment"
 readme = "README.md"

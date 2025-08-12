@@ -153,7 +153,7 @@ class SuperMarioBros2Env(gym.Env):
             raise FileNotFoundError(f"Bundled ROM file not found: {rom_path}")
 
         # Initialize TetaNES. We want video frames for display
-        self._nes = NesEnv(max_episode_steps=self.max_episode_steps, headless=False)
+        self._nes = NesEnv(headless=False)
 
         # Load ROM
         with open(rom_path, 'rb') as f:
