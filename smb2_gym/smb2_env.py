@@ -9,7 +9,7 @@ from typing import (
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
-from tetanes import NesEnv
+from tetanes_py import NesEnv
 
 from .actions import (
     COMPLEX_ACTIONS,
@@ -92,6 +92,7 @@ class SuperMarioBros2Env(gym.Env):
         level: str = "1-1",
         character: int = 3,
         action_type: ActionType = "simple",
+        reset_on_life_loss: bool = False,
     ):
         """Initialize the SMB2 environment.
 
@@ -101,9 +102,27 @@ class SuperMarioBros2Env(gym.Env):
             level: Level to start at (e.g., "1-1", "7-2")
             character: Character to play as (0=Mario, 1=Princess, 2=Toad, 3=Luigi)
             action_type: Type of action space
+            reset_on_life_loss: If True, episode terminates when Mario loses a life
         """
         super().__init__()
 
+        self.render_mode = render_mode
+        self.max_episode_steps = max_episode_steps
+        self.reset_on_life_loss = reset_on_life_loss
+
+        self._init_game_parameters(level, character, action_type)
+        self._init_emulator()
+        self._init_spaces()
+        self._init_state_tracking()
+
+    def _init_game_parameters(self, level: str, character: int, action_type: str) -> None:
+        """Initialize and validate game parameters.
+
+        Args:
+            level: Starting level
+            character: Character selection
+            action_type: Type of action space
+        """
         # Validate and store level
         self.starting_level = level
         self.starting_level_id = self._validate_level(level)
@@ -122,6 +141,8 @@ class SuperMarioBros2Env(gym.Env):
             )
         self.action_type = action_type
 
+    def _init_emulator(self) -> None:
+        """Initialize the NES emulator and load ROM."""
         # Always use the bundled ROM
         rom_path = os.path.join(
             os.path.dirname(__file__), '_nes', 'roms', 'super_mario_bros2_europe.nes'
@@ -131,11 +152,8 @@ class SuperMarioBros2Env(gym.Env):
         if not os.path.exists(rom_path):
             raise FileNotFoundError(f"Bundled ROM file not found: {rom_path}")
 
-        self.render_mode = render_mode
-        self.max_episode_steps = max_episode_steps
-
         # Initialize TetaNES. We want video frames for display
-        self._nes = NesEnv(max_episode_steps=max_episode_steps, headless=False)
+        self._nes = NesEnv(max_episode_steps=self.max_episode_steps, headless=False)
 
         # Load ROM
         with open(rom_path, 'rb') as f:
@@ -143,8 +161,12 @@ class SuperMarioBros2Env(gym.Env):
         rom_name = os.path.basename(rom_path)
         self._nes.load_rom(rom_name, rom_data)
 
-        # Define spaces
-        self.observation_space = spaces.Box(low=0, high=255, shape=(SCREEN_HEIGHT, SCREEN_WIDTH, 3), dtype=np.uint8)
+    def _init_spaces(self) -> None:
+        """Initialize observation and action spaces."""
+        # Define observation space
+        self.observation_space = spaces.Box(
+            low=0, high=255, shape=(SCREEN_HEIGHT, SCREEN_WIDTH, 3), dtype=np.uint8
+        )
 
         # Define action space based on action_type
         if self.action_type == "all":
@@ -157,9 +179,11 @@ class SuperMarioBros2Env(gym.Env):
             self.action_space = spaces.Discrete(len(SIMPLE_ACTIONS))
             self._action_meanings = SIMPLE_ACTIONS
 
-        # State tracking
+    def _init_state_tracking(self) -> None:
+        """Initialize state tracking variables."""
         self._done = False
         self._episode_steps = 0
+        self._previous_lives = None  # Track lives to detect life loss
 
     # ---- Primary Gym methods ---------------------------------------
 
@@ -201,12 +225,14 @@ class SuperMarioBros2Env(gym.Env):
             )
 
         self.load_state_from_path(save_path)
-        print(f"Loaded save state: {character_name}/{level_filename}")
 
         # Get one frame after loading save state
         obs, _, _, _, _ = self._nes.step([False] * 8, render=True)
 
         info = self.info
+
+        # Initialize life tracking for detecting life loss
+        self._previous_lives = self.lives
 
         return np.array(obs), info
 
@@ -237,8 +263,16 @@ class SuperMarioBros2Env(gym.Env):
         info = self.info
         info.update(nes_info)  # Include NES emulator info
 
-        # 3. Check termination
-        terminated = self.is_game_over
+        # 3. Check for life loss and update tracking
+        life_lost = self._detect_life_loss()
+        if life_lost:
+            info['life_lost'] = True
+
+        # Update life tracking for next step
+        self._previous_lives = self.lives
+
+        # 4. Check termination
+        terminated = self.is_game_over or life_lost
         truncated = (
             self.max_episode_steps is not None and self._episode_steps >= self.max_episode_steps
         )
@@ -317,6 +351,25 @@ class SuperMarioBros2Env(gym.Env):
         # Only consider it game over if lives is exactly 0
         lives = self.lives
         return lives == 0
+
+    def _detect_life_loss(self) -> bool:
+        """Detect if Mario lost a life this step.
+
+        Returns:
+            True if a life was lost, False otherwise
+        """
+        if not self.reset_on_life_loss:
+            return False
+
+        if self._previous_lives is None:
+            return False
+
+        # Don't detect life loss during initialization
+        if self._episode_steps < GAME_INIT_FRAMES:
+            return False
+
+        current_lives = self.lives
+        return current_lives < self._previous_lives
 
     @property
     def lives(self) -> int:

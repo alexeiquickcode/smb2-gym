@@ -13,7 +13,7 @@ smb2_gym = ["_nes/**/*"]
 
 [project]
 name = "smb2-gym"
-version = "0.1.0"
+version = "0.1.2"
 authors = [{ name = "Alexei Quick" }]
 description = "Super Mario Bros 2 (Europe) Gymnasium Environment"
 readme = "README.md"
@@ -36,7 +36,7 @@ dependencies = [
     "gymnasium>=0.29.0",
     "numpy>=1.21.0",
     "pygame>=2.1.0",
-    "tetanes @ https://github.com/alexeiquickcode/smb2-gym/raw/main/smb2_gym/_nes/wheels/tetanes-0.12.2-cp38-abi3-manylinux_2_34_x86_64.whl ; platform_system=='Linux' and platform_machine=='x86_64'",
+    "tetanes-py @ git+https://github.com/alexeiquickcode/tetanes.git@main#subdirectory=tetanes-python",
 ]
 
 [project.urls]
