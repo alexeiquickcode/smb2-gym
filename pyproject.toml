@@ -36,7 +36,7 @@ dependencies = [
     "gymnasium>=0.29.0",
     "numpy>=1.21.0",
     "pygame>=2.1.0",
-    "tetanes-py @ git+https://github.com/alexeiquickcode/tetanes.git@main#subdirectory=tetanes-python",
+    "tetanes-py>=0.1.0",
 ]
 
 [project.urls]
