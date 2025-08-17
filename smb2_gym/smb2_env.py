@@ -344,11 +344,9 @@ class SuperMarioBros2Env(gym.Env):
     @property
     def is_game_over(self) -> bool:
         """Check if game is over (lives = 0)."""
-        # During initial frames, don't trigger game over
         if self._episode_steps < GAME_INIT_FRAMES:  # Give the game 5 seconds to fully initialize
             return False
 
-        # Only consider it game over if lives is exactly 0
         lives = self.lives
         return lives == 0
 
@@ -381,14 +379,26 @@ class SuperMarioBros2Env(gym.Env):
         return 2  # Default if invalid
 
     @property
-    def x_position(self) -> int:
+    def x_position_global(self) -> int:
         """Get player global X position."""
         x_page = self._read_ram_safe(PLAYER_X_PAGE, default=0)
         x_pos = self._read_ram_safe(PLAYER_X_POSITION, default=0)
         return (x_page * PAGE_SIZE) + x_pos
 
     @property
-    def y_position(self) -> int:
+    def x_position(self) -> int:
+        """Get player global X position."""
+        x_pos = self._read_ram_safe(PLAYER_X_POSITION, default=0)
+        return x_pos
+
+    @property
+    def x_page(self) -> int:
+        """Get the X page of the player position."""
+        x_page = self._read_ram_safe(PLAYER_X_PAGE)
+        return x_page
+
+    @property
+    def y_position_global(self) -> int:
         """Get player global Y position."""
         y_page = self._read_ram_safe(PLAYER_Y_PAGE, default=0)
         y_pos = self._read_ram_safe(PLAYER_Y_POSITION, default=0)
@@ -401,6 +411,18 @@ class SuperMarioBros2Env(gym.Env):
             return 0
 
         return global_position
+
+    @property
+    def y_position(self) -> int:
+        """Get player global Y position."""
+        y_pos = self._read_ram_safe(PLAYER_Y_POSITION, default=0)
+        return y_pos
+
+    @property
+    def y_page(self) -> int:
+        """Get the Y page of the player position."""
+        y_page = self._read_ram_safe(PLAYER_Y_PAGE)
+        return y_page
 
     @property
     def world(self) -> int:
