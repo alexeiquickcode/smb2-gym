@@ -317,8 +317,12 @@ class SuperMarioBros2Env(gym.Env):
         """
         return {
             'life': self.lives,
-            'x_pos': self.x_position,
-            'y_pos': self.y_position,
+            'x_pos_global': self.x_position_global,
+            'y_pos_global': self.y_position_global,
+            'x_pos_local': self.x_position,
+            'y_pos_local': self.y_position,
+            'x_page': self.x_page,
+            'y_page': self.y_page,
             'world': self.world,
             'level': self.level,
             'character': self.character,
