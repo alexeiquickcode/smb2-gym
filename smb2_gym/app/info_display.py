@@ -33,11 +33,14 @@ def draw_info(screen: pygame.Surface, info: dict[str, Any], font: pygame.font.Fo
         f"Hearts: {info['hearts']}/4",
         f"Continues: {info['continues']}",
         "",
-        f"Position:",
-        f"  X: {info['x_pos']}",
-        f"  Y: {info['y_pos']}",
-        f"  Speed: {info['player_speed']}",
-        f"  On Vine: {'Yes' if info['on_vine'] else 'No'}",
+        f"Position (Local):",
+        f"  X: {info['x_pos_local']}",
+        f"  Y: {info['y_pos_local']}",
+        f"Position (Global):",
+        f"  X: {info['x_pos_global']}",
+        f"  Y: {info['y_pos_global']}",
+        f"Speed: {info['player_speed']}",
+        f"On Vine: {'Yes' if info['on_vine'] else 'No'}",
     ]
 
     # Column 2 - Level & World Info
