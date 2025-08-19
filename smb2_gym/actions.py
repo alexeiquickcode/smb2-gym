@@ -28,8 +28,7 @@ SIMPLE_ACTIONS = [
     ['left', 'A'],  # Jump left  
     ['right', 'B'],  # Pick up right
     ['left', 'B'],  # Pick up left
-    ['down'],  # Crouch/charge jump
-    ['down', 'A'],  # Super jump (crouch jump)
+    ['down'],  # Crouch/charge super jump (hold 77+ frames then press A)
 ]
 
 COMPLEX_ACTIONS = [
@@ -42,14 +41,13 @@ COMPLEX_ACTIONS = [
     ['left', 'A'],  # Run left
     ['left', 'B'],  # Pick up left
     ['left', 'A', 'B'],  # Jump throw left
-    ['down'],
+    ['down'],  # Charge super jump (hold 77+ frames then press A)
     ['down', 'B'],  # Pick up from ground
     ['up'],  # Enter door
     ['up', 'B'],  # Enter door with B held
     ['A'],  # Jump
     ['B'],  # Pick up/throw
     ['A', 'B'],  # Jump and throw
-    ['down', 'A'],  # Crouch jump
 ]
 
 BUTTON_MAP = {
