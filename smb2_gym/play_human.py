@@ -27,13 +27,14 @@ from smb2_gym.constants import (
 from smb2_gym.smb2_env import SuperMarioBros2Env
 
 
-def play_human(level: str = "1-1", character: str = "mario", scale: int = DEFAULT_SCALE):
+def play_human(level: str = "1-1", character: str = "mario", scale: int = DEFAULT_SCALE, use_save_state: bool = True):
     """Play Super Mario Bros 2 with keyboard controls.
 
     Args:
         level: Level to play (e.g., "1-1", "1-2")
         character: Character to play as ("mario", "luigi", "peach", or "toad")
         scale: Display scale factor
+        use_save_state: If False, start from beginning of game
     """
     pygame.init()
 
@@ -41,7 +42,7 @@ def play_human(level: str = "1-1", character: str = "mario", scale: int = DEFAUL
     char_map = {name.lower(): idx for idx, name in CHARACTER_NAMES.items()}
     char_index = char_map.get(character.lower(), 0)
 
-    env = SuperMarioBros2Env(level=level, character=char_index)
+    env = SuperMarioBros2Env(level=level, character=char_index, use_save_state=use_save_state)
 
     # Setup pygame
     width, height = SCREEN_WIDTH * scale, SCREEN_HEIGHT * scale
@@ -180,12 +181,17 @@ def main():
         help="Character to play as"
     )
     parser.add_argument("--scale", type=int, default=DEFAULT_SCALE, help="Display scale factor")
+    parser.add_argument("--no-save-state", action="store_true", help="Start from beginning without loading save state")
     args = parser.parse_args()
 
     print(f"Playing as {args.char} on level {args.level} with scale {args.scale}")
+    if args.no_save_state:
+        print("Starting from beginning (no save state)")
+        print("Auto-navigating to character selection screen...")
+        print("Use arrow keys to select character, then press Z (A button) to start!")
 
     try:
-        play_human(args.level, args.char, args.scale)
+        play_human(args.level, args.char, args.scale, use_save_state=not args.no_save_state)
     except FileNotFoundError as e:
         print(f"Error: {e}")
         sys.exit(1)

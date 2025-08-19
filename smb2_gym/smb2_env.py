@@ -93,6 +93,7 @@ class SuperMarioBros2Env(gym.Env):
         character: int = 3,
         action_type: ActionType = "simple",
         reset_on_life_loss: bool = False,
+        use_save_state: bool = True,
     ):
         """Initialize the SMB2 environment.
 
@@ -103,12 +104,14 @@ class SuperMarioBros2Env(gym.Env):
             character: Character to play as (0=Mario, 1=Princess, 2=Toad, 3=Luigi)
             action_type: Type of action space
             reset_on_life_loss: If True, episode terminates when Mario loses a life
+            use_save_state: If False, start from beginning without loading save state
         """
         super().__init__()
 
         self.render_mode = render_mode
         self.max_episode_steps = max_episode_steps
         self.reset_on_life_loss = reset_on_life_loss
+        self.use_save_state = use_save_state
 
         self._init_game_parameters(level, character, action_type)
         self._init_emulator()
@@ -145,7 +148,7 @@ class SuperMarioBros2Env(gym.Env):
         """Initialize the NES emulator and load ROM."""
         # Always use the bundled ROM
         rom_path = os.path.join(
-            os.path.dirname(__file__), '_nes', 'roms', 'super_mario_bros2_europe.nes'
+            os.path.dirname(__file__), '_nes', 'roms', 'super_mario_bros_2_prg0.nes'
         )
         rom_path = os.path.abspath(rom_path)
 
@@ -210,23 +213,42 @@ class SuperMarioBros2Env(gym.Env):
         self._done = False
         self._episode_steps = 0
 
-        # Construct path to save state file
-        character_name = CHARACTER_NAMES[self.starting_character].lower()
-        level_filename = self.starting_level + '.sav'
-        save_path = os.path.join(
-            os.path.dirname(__file__), '_nes', 'levels', character_name, level_filename
-        )
-
-        # Load the save state - this is required
-        if not os.path.exists(save_path):
-            raise FileNotFoundError(
-                f"Save state file not found: {save_path}. "
-                f"Required save states must exist for character {character_name} level {self.starting_level}"
+        if self.use_save_state:
+            # Construct path to save state file
+            character_name = CHARACTER_NAMES[self.starting_character].lower()
+            level_filename = self.starting_level + '.sav'
+            save_path = os.path.join(
+                os.path.dirname(__file__), '_nes', 'levels', character_name, level_filename
             )
 
-        self.load_state_from_path(save_path)
+            # Load the save state if it exists
+            if not os.path.exists(save_path):
+                raise FileNotFoundError(
+                    f"Save state file not found: {save_path}. "
+                    f"Required save states must exist for character {character_name} level {self.starting_level}"
+                )
 
-        # Get one frame after loading save state
+            self.load_state_from_path(save_path)
+        else:
+            # When not using save state, navigate to character selection screen
+            # Wait for title screen to appear
+            for _ in range(120):  # 2 seconds
+                self._nes.step([False] * 8, render=False)
+
+            # Press START to get past title screen
+            start_button = [False, False, False, True, False, False, False, False]  # START button
+            for _ in range(10):  # Press START
+                self._nes.step(start_button, render=False)
+            for _ in range(10):  # Release
+                self._nes.step([False] * 8, render=False)
+
+            # Wait for transition to character select screen
+            for _ in range(120):  # 2 seconds
+                self._nes.step([False] * 8, render=False)
+
+            # Stop here - let the user select their character manually
+
+        # Get one frame after reset/loading save state
         obs, _, _, _, _ = self._nes.step([False] * 8, render=True)
 
         info = self.info
