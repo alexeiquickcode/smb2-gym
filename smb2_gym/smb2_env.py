@@ -147,11 +147,9 @@ class SuperMarioBros2Env(gym.Env):
     def _init_emulator(self) -> None:
         """Initialize the NES emulator and load ROM."""
         # Always use the bundled ROM
-        rom_path = os.path.join(
-            os.path.dirname(__file__), '_nes', 'roms', 'super_mario_bros_2_prg0.nes'
-        )
+        rom_path = 'super_mario_bros_2_prg0.nes'
+        rom_path = os.path.join(os.path.dirname(__file__), '_nes', 'prg0', rom_path)
         rom_path = os.path.abspath(rom_path)
-
         if not os.path.exists(rom_path):
             raise FileNotFoundError(f"Bundled ROM file not found: {rom_path}")
 
