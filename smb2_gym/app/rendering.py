@@ -234,7 +234,7 @@ class HumanPlayRenderer(GameRenderer):
 
 def render_frame(screen: pygame.Surface, obs: np.ndarray, width: int, height: int) -> None:
     """Render a game frame to a pygame surface.
-    
+
     Args:
         screen: Pygame surface to render to
         obs: Observation array of shape (240, 256, 3) 

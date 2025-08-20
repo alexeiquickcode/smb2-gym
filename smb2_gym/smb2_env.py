@@ -19,6 +19,7 @@ from .actions import (
     actions_to_buttons,
     get_action_meanings,
 )
+from .app import InitConfig
 from .constants import (
     CHARACTER,
     CHARACTER_NAMES,
@@ -87,10 +88,9 @@ class SuperMarioBros2Env(gym.Env):
 
     def __init__(
         self,
+        init_config: InitConfig,
         render_mode: Optional[str] = None,
         max_episode_steps: Optional[int] = None,
-        level: str = "1-1",
-        character: int = 3,
         action_type: ActionType = "simple",
         reset_on_life_loss: bool = False,
         use_save_state: bool = True,
@@ -98,10 +98,9 @@ class SuperMarioBros2Env(gym.Env):
         """Initialize the SMB2 environment.
 
         Args:
+            init_config: InitConfig object specifying initialization mode
             render_mode: 'human' or None
             max_episode_steps: Maximum steps per episode (for truncation)
-            level: Level to start at (e.g., "1-1", "7-2")
-            character: Character to play as (0=Mario, 1=Princess, 2=Toad, 3=Luigi)
             action_type: Type of action space
             reset_on_life_loss: If True, episode terminates when Mario loses a life
             use_save_state: If False, start from beginning without loading save state
@@ -112,30 +111,17 @@ class SuperMarioBros2Env(gym.Env):
         self.max_episode_steps = max_episode_steps
         self.reset_on_life_loss = reset_on_life_loss
         self.use_save_state = use_save_state
+        self.init_config = init_config
 
-        self._init_game_parameters(level, character, action_type)
-        self._init_emulator()
-        self._init_spaces()
-        self._init_state_tracking()
-
-    def _init_game_parameters(self, level: str, character: int, action_type: str) -> None:
-        """Initialize and validate game parameters.
-
-        Args:
-            level: Starting level
-            character: Character selection
-            action_type: Type of action space
-        """
-        # Validate and store level
-        self.starting_level = level
-        self.starting_level_id = self._validate_level(level)
-
-        # Validate and store character
-        if character not in [0, 1, 2, 3]:
-            raise ValueError(
-                f"Invalid character {character}. Must be 0-3 (0=Mario, 1=Princess, 2=Toad, 3=Luigi)"
-            )
-        self.starting_character = character
+        # Store relevant attributes for character/level mode
+        if self.init_config.mode == "character_level":
+            self.starting_level = self.init_config.level
+            self.starting_level_id = self.init_config.level_id
+            self.starting_character = self.init_config.character_id
+        else:
+            self.starting_level = None
+            self.starting_level_id = None
+            self.starting_character = None
 
         # Validate and store action type
         if action_type not in ["all", "complex", "simple"]:
@@ -144,16 +130,17 @@ class SuperMarioBros2Env(gym.Env):
             )
         self.action_type = action_type
 
+        self._init_emulator()
+        self._init_spaces()
+        self._init_state_tracking()
+
     def _init_emulator(self) -> None:
         """Initialize the NES emulator and load ROM."""
-        # Always use the bundled ROM
-        rom_path = 'super_mario_bros_2_prg0.nes'
-        rom_path = os.path.join(os.path.dirname(__file__), '_nes', 'prg0', rom_path)
-        rom_path = os.path.abspath(rom_path)
+        rom_path = self.init_config.get_rom_path()
         if not os.path.exists(rom_path):
-            raise FileNotFoundError(f"Bundled ROM file not found: {rom_path}")
+            raise FileNotFoundError(f"ROM file not found: {rom_path}")
 
-        # Initialize TetaNES. We want video frames for display
+        # Initialize TetaNES
         self._nes = NesEnv(headless=False)
 
         # Load ROM
@@ -212,21 +199,13 @@ class SuperMarioBros2Env(gym.Env):
         self._episode_steps = 0
 
         if self.use_save_state:
-            # Construct path to save state file
-            character_name = CHARACTER_NAMES[self.starting_character].lower()
-            level_filename = self.starting_level + '.sav'
-            save_path = os.path.join(
-                os.path.dirname(__file__), '_nes', 'levels', character_name, level_filename
-            )
+            save_path = self.init_config.get_save_state_path()
 
-            # Load the save state if it exists
-            if not os.path.exists(save_path):
-                raise FileNotFoundError(
-                    f"Save state file not found: {save_path}. "
-                    f"Required save states must exist for character {character_name} level {self.starting_level}"
-                )
+            if save_path and not os.path.exists(save_path):
+                raise FileNotFoundError(f"Save state file not found: {save_path}")
 
-            self.load_state_from_path(save_path)
+            if save_path:
+                self.load_state_from_path(save_path)
         else:
             # When not using save state, navigate to character selection screen
             # Wait for title screen to appear
@@ -612,29 +591,6 @@ class SuperMarioBros2Env(gym.Env):
             return actions_to_buttons(SIMPLE_ACTIONS[action])
         else:
             raise ValueError('Action type not supported.')
-
-    def _validate_level(self, level: str) -> int:
-        """Validate and convert level string to level ID.
-
-        Args:
-            level: Level string like "1-1" or "7-2"
-
-        Returns:
-            Level ID for RAM
-
-        Raises:
-            ValueError: If level is invalid
-        """
-        # Reverse mapping
-        level_str_to_id = {v: k for k, v in LEVEL_NAMES.items()}
-
-        if level not in level_str_to_id:
-            valid_levels = sorted(LEVEL_NAMES.values())
-            raise ValueError(
-                f"Invalid level '{level}'. Valid levels are: {', '.join(valid_levels)}"
-            )
-
-        return level_str_to_id[level]
 
     # ---- Other bindings --------------------------------------------
 

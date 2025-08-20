@@ -12,7 +12,13 @@ def get_required_info_height(scale: int = 1) -> int:
     return 240 * scale // 2  # Height for 4 columns with padding, scaled appropriately
 
 
-def draw_info(screen: pygame.Surface, info: dict[str, Any], font: pygame.font.Font, start_y: int = 10, screen_width: int = 512) -> None:
+def draw_info(
+    screen: pygame.Surface,
+    info: dict[str, Any],
+    font: pygame.font.Font,
+    start_y: int = 10,
+    screen_width: int = 512
+) -> None:
     """Draw comprehensive game information on screen in 4 columns.
 
     Args:
@@ -119,7 +125,13 @@ def draw_info(screen: pygame.Surface, info: dict[str, Any], font: pygame.font.Fo
 # ------------------------------------------------------------------------------
 
 
-def create_info_panel(screen: pygame.Surface, info: dict[str, Any], font: pygame.font.Font, game_height: int, screen_width: int) -> int:
+def create_info_panel(
+    screen: pygame.Surface,
+    info: dict[str, Any],
+    font: pygame.font.Font,
+    game_height: int,
+    screen_width: int,
+) -> int:
     """Create and draw the info panel below the game screen.
 
     Args:
@@ -128,7 +140,7 @@ def create_info_panel(screen: pygame.Surface, info: dict[str, Any], font: pygame
         font: Pygame font object
         game_height: Height of game area (where info panel starts)
         screen_width: Width of screen
-        
+
     Returns:
         Height of the info panel
     """
