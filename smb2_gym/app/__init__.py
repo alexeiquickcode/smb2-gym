@@ -90,7 +90,7 @@ class InitConfig:
             return "character_level"
         elif self.rom or self.save_state:
             return "built_in_rom"
-        elif self.rom_path or self.save_state_path:
+        elif self.rom_path:  # Only check rom_path for custom ROM mode
             return "custom_rom"
         else:
             return "default"
@@ -105,11 +105,12 @@ class InitConfig:
             if not self.rom or not self.save_state:
                 raise ValueError("Built-in ROM mode requires both 'rom' and 'save_state'")
         elif self.mode == "custom_rom":
-            if not self.rom_path or not self.save_state_path:
-                raise ValueError("Custom ROM mode requires both 'rom_path' and 'save_state_path'")
+            if not self.rom_path:
+                raise ValueError("Custom ROM mode requires 'rom_path'")
             if not os.path.exists(self.rom_path):
                 raise FileNotFoundError(f"Custom ROM file not found: {self.rom_path}")
-            if not os.path.exists(self.save_state_path):
+            # Only validate save state if provided
+            if self.save_state_path and not os.path.exists(self.save_state_path):
                 raise FileNotFoundError(f"Custom save state file not found: {self.save_state_path}")
 
     def _set_defaults(self) -> None:
@@ -147,10 +148,11 @@ class InitConfig:
             self.rom_variant = validate_rom(self.rom)
 
         elif self.mode == "custom_rom":
-            # Convert to absolute paths (guaranteed to be non-None after validation)
-            assert self.rom_path is not None and self.save_state_path is not None
+            # Convert to absolute paths (rom_path guaranteed to be non-None after validation)
+            assert self.rom_path is not None
             self.rom_path = os.path.abspath(self.rom_path)
-            self.save_state_path = os.path.abspath(self.save_state_path)
+            if self.save_state_path:
+                self.save_state_path = os.path.abspath(self.save_state_path)
             self.rom_variant = None
 
     def get_rom_path(self) -> str:
@@ -186,7 +188,7 @@ class InitConfig:
         base_dir = os.path.dirname(os.path.dirname(__file__))
 
         if self.mode == "custom_rom":
-            assert self.save_state_path is not None  # Validated in _process_parameters
+            # Return save state path if provided, otherwise None
             return self.save_state_path
         elif self.mode == "built_in_rom":
             assert self.rom_variant is not None and self.save_state is not None  # Validated in _process_parameters
@@ -211,7 +213,10 @@ class InitConfig:
             Description string
         """
         if self.mode == "custom_rom":
-            return f"Using custom ROM: {self.rom_path}\nUsing custom save state: {self.save_state_path}"
+            desc = f"Using custom ROM: {self.rom_path}"
+            if self.save_state_path:
+                desc += f"\nUsing custom save state: {self.save_state_path}"
+            return desc
         elif self.mode == "built_in_rom":
             return f"Using ROM variant: {self.rom}\nUsing save state: {self.save_state}"
         else:  # character_level
