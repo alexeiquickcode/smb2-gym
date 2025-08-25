@@ -233,6 +233,9 @@ class SuperMarioBros2Env(gym.Env):
         # Initialize life tracking for detecting life loss
         self._previous_lives = self.lives
 
+        # Initialize level completion tracking
+        self._prev_levels_finished_total = sum(info['levels_finished'].values())
+
         return np.array(obs), info
 
     def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
@@ -270,8 +273,24 @@ class SuperMarioBros2Env(gym.Env):
         # Update life tracking for next step
         self._previous_lives = self.lives
 
-        # 4. Check termination
-        terminated = self.is_game_over or life_lost
+        # 4. Check for level completion
+        # Since LEVEL_TRANSITION at 0x04EC changes too quickly (sub-frame),
+        # we detect level completion by monitoring the levels_finished counter
+        level_completed = False
+
+        if hasattr(self, '_prev_levels_finished_total'):
+            current_total = sum(info['levels_finished'].values())
+            if current_total > self._prev_levels_finished_total:
+                level_completed = True
+            self._prev_levels_finished_total = current_total
+        else:
+            self._prev_levels_finished_total = sum(info['levels_finished'].values())
+
+        if level_completed:
+            info['level_completed'] = True
+
+        # 5. Check termination
+        terminated = self.is_game_over or life_lost or level_completed
         truncated = (
             self.max_episode_steps is not None and self._episode_steps >= self.max_episode_steps
         )
@@ -338,9 +357,11 @@ class SuperMarioBros2Env(gym.Env):
             'on_vine': self.on_vine,
             'float_timer': self.float_timer,
             'levels_finished': self.levels_finished,
-            'door_transition_timer': self.door_transition_timer,
             'vegetables_pulled': self.vegetables_pulled,
             'subspace_status': self.subspace_status,
+            'level_transition': self.level_transition,
+            'door_transition_timer': self.door_transition_timer,
+            'starman_timer': self.starman_timer,
             'enemies_defeated': self.enemies_defeated,
         }
 
@@ -562,6 +583,38 @@ class SuperMarioBros2Env(gym.Env):
     def subspace_status(self) -> int:
         """Get subspace status (0=not in subspace, 2=in subspace)."""
         return self._read_ram_safe(SUBSPACE_STATUS, default=0)
+
+    @property
+    def door_transition_timer(self) -> int:
+        """Get door transition timer (counts up during door transitions)."""
+        return self._read_ram_safe(DOOR_TRANSITION_TIMER, default=0)
+
+    @property
+    def starman_timer(self) -> int:
+        """Get starman timer value (also at 0x04E0)."""
+        return self._read_ram_safe(STARMAN_TIMER, default=0)
+
+    @property
+    def level_transition(self) -> int:
+        """Get level transition state.
+
+        NOTE: This value at 0x04EC appears to change for less than a frame.
+        The game sets it to non-zero and immediately clears it back to 0 
+        within the same frame's CPU execution (as seen in disassembly at 
+        $E66D: STA $04EC). Therefore, we cannot reliably detect transitions
+        by polling this value once per frame.
+        For reliable level completion detection, use the increase in 
+        'levels_finished' counter instead.
+
+        Values (theoretical):
+        0 - normal gameplay
+        1 - restart same level  
+        2 - game over
+        3 - end level, go to bonus game (level completed)
+        4 - warp
+        """
+        # This will almost always return 0 due to sub-frame clearing
+        return self._read_ram_safe(LEVEL_TRANSITION, default=0)
 
     # ---- Validators ------------------------------------------------
 

@@ -6,6 +6,7 @@ import sys
 import pygame
 
 from smb2_gym.actions import actions_to_buttons
+from smb2_gym.app import InitConfig
 from smb2_gym.app.info_display import (
     create_info_panel,
     get_required_info_height,
@@ -24,11 +25,19 @@ from smb2_gym.constants import (
     SCREEN_WIDTH,
     WINDOW_CAPTION,
 )
-from smb2_gym.app import InitConfig
 from smb2_gym.smb2_env import SuperMarioBros2Env
 
 
-def play_human(level=None, character=None, rom=None, save_state=None, custom_rom=None, custom_state=None, scale=DEFAULT_SCALE, use_save_state=True):
+def play_human(
+    level=None,
+    character=None,
+    rom=None,
+    save_state=None,
+    custom_rom=None,
+    custom_state=None,
+    scale=DEFAULT_SCALE,
+    use_save_state=True
+):
     """Play Super Mario Bros 2 with keyboard controls.
 
     Args:
@@ -52,10 +61,10 @@ def play_human(level=None, character=None, rom=None, save_state=None, custom_rom
         rom_path=custom_rom,
         save_state_path=custom_state
     )
-    
+
     # Print initialization info
     print(config.describe())
-    
+
     # Create environment with config
     env = SuperMarioBros2Env(init_config=config, use_save_state=use_save_state)
 
@@ -92,6 +101,7 @@ def play_human(level=None, character=None, rom=None, save_state=None, custom_rom
     print("    F5: Save state (creates save_state_0.sav)")
     print("    F9: Load state (loads save_state_0.sav)")
 
+    game_over = False
     while running:
 
         # Handle events
@@ -106,6 +116,7 @@ def play_human(level=None, character=None, rom=None, save_state=None, custom_rom
                     paused = not paused
                 elif event.key == pygame.K_r:
                     obs, info = env.reset()
+                    game_over = False
                     print("Game reset!")
                 elif event.key == pygame.K_F5:
                     try:
@@ -120,7 +131,7 @@ def play_human(level=None, character=None, rom=None, save_state=None, custom_rom
                     except Exception as e:
                         print(f"Failed to load state: {e}")
 
-        if not paused:
+        if not paused and not game_over:
             # Get keyboard state
             keys = pygame.key.get_pressed()
 
@@ -162,7 +173,11 @@ def play_human(level=None, character=None, rom=None, save_state=None, custom_rom
             obs, reward, terminated, truncated, info = env.step(action)
 
             if terminated or truncated:
-                print("Game Over! Press R to reset or ESC to quit.")
+                if info.get('level_completed'):
+                    print("Level Completed! Press R (in game window) to reset or ESC to quit.")
+                else:
+                    print("Game Over! Press R (in game window) to reset or ESC to quit.")
+                game_over = True
                 # Don't auto-reset, wait for user input
 
         render_frame(screen, obs, width, height)
@@ -193,17 +208,17 @@ def main():
 Initialization modes:
   1. Character/Level mode (default):
      --level 1-1 --char peach
-  
+
   2. Built-in ROM variant mode:
      --rom prg0_edited --save-state easy_combined_curriculum.sav
-  
+
   3. Custom ROM mode:
      --custom-rom /path/to/rom.nes --custom-state /path/to/save.sav
-     
+
 Only one initialization mode can be used at a time.
 """
     )
-    
+
     # Character/Level mode arguments
     parser.add_argument("--level", type=str, help="Level to play (e.g., 1-1, 1-2)")
     parser.add_argument(
@@ -212,24 +227,25 @@ Only one initialization mode can be used at a time.
         choices=["mario", "luigi", "peach", "toad"],
         help="Character to play as"
     )
-    
+
     # Built-in ROM mode arguments
     parser.add_argument(
-        "--rom", 
-        type=str, 
-        choices=["prg0", "prg0_edited"],
-        help="ROM variant to use"
+        "--rom", type=str, choices=["prg0", "prg0_edited"], help="ROM variant to use"
     )
     parser.add_argument("--save-state", type=str, help="Save state file to load")
-    
+
     # Custom ROM mode arguments
     parser.add_argument("--custom-rom", type=str, help="Custom ROM file path")
     parser.add_argument("--custom-state", type=str, help="Custom save state file path")
-    
+
     # Common arguments
     parser.add_argument("--scale", type=int, default=DEFAULT_SCALE, help="Display scale factor")
-    parser.add_argument("--no-save-state", action="store_true", help="Start from beginning without loading save state")
-    
+    parser.add_argument(
+        "--no-save-state",
+        action="store_true",
+        help="Start from beginning without loading save state"
+    )
+
     args = parser.parse_args()
 
     # Extract save_state argument (argparse converts dashes to underscores)
@@ -245,7 +261,7 @@ Only one initialization mode can be used at a time.
             rom_path=args.custom_rom,
             save_state_path=args.custom_state
         )
-        
+
         if args.no_save_state:
             print("Starting from beginning (no save state)")
             if config.mode == "character_level" and not args.level and not args.char:
@@ -254,7 +270,7 @@ Only one initialization mode can be used at a time.
 
         play_human(
             level=args.level,
-            character=args.char, 
+            character=args.char,
             rom=args.rom,
             save_state=save_state,
             custom_rom=args.custom_rom,
