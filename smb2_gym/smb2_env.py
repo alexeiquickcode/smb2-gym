@@ -337,7 +337,6 @@ class SuperMarioBros2Env(gym.Env):
         Returns:
             dict with game state information
         """
-        print(self.global_coordinate_system)
         return {
             'life': self.lives,
             'x_pos_global': self.x_position_global,
