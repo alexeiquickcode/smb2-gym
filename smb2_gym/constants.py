@@ -6,6 +6,40 @@ Detailed RAM map available at:
 https://datacrystal.tcrf.net/wiki/Super_Mario_Bros._2_(NES)/RAM_map
 """
 
+from typing import NamedTuple
+
+
+class GlobalCoordinate(NamedTuple):
+    """Global coordinate system combining level structure with player position.
+    
+    Represents a 4-tuple coordinate system: (Area, Sub-area, Global_X, Global_Y)
+    
+    This coordinate system provides a unified way to track the player's location
+    within the level structure and their exact position in the game world:
+    
+    Level Structure:
+    - Area: Broad game regions (e.g., different worlds or major sections)
+    - Sub-area: Subdivisions within an area (e.g., main level vs sub-world)
+    
+    World Position:
+    - Global X: Absolute horizontal position in the level 
+    - Global Y: Absolute vertical position in the level
+    
+    Args:
+        area: Current area from memory address $04E7
+        sub_area: Current sub-area from memory address $04E8  
+        global_x: Player's global X position (x_page * PAGE_SIZE + x_position)
+        global_y: Player's global Y position (y_page * PAGE_SIZE + y_position)
+        
+    Example:
+        coord = GlobalCoordinate(area=1, sub_area=0, global_x=1024, global_y=192)
+        # Represents area 1, sub-area 0, position (1024, 192)
+    """
+    area: int
+    sub_area: int
+    global_x: int
+    global_y: int
+
 # Display/Rendering constants
 SCREEN_WIDTH = 256
 SCREEN_HEIGHT = 240
@@ -58,6 +92,9 @@ CHARACTER = 0x008F  # 0=Mario, 1=Peach, 2=Toad, 3=Luigi
 CURRENT_LEVEL = 0x0531  # 00-13 (levels 1-1 to 7-2)
 WORLD_NUMBER = 0x0635
 LEVEL_TILESET = 0x06F7
+AREA = 0x04E7  # Current area - part of global coordinate system (A, B, C, X, Y)
+SUB_AREA = 0x04E8  # Current sub-area - subdivisions within area for coordinate system  
+PAGE = 0x04E9  # Current page - memory organization boundary for coordinate system
 
 # Collectibles
 CHERRIES = 0x062A

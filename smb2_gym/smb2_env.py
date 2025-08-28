@@ -21,6 +21,7 @@ from .actions import (
 )
 from .app import InitConfig
 from .constants import (
+    AREA,
     CHARACTER,
     CHARACTER_NAMES,
     CHERRIES,
@@ -52,6 +53,7 @@ from .constants import (
     MAX_LIVES,
     MAX_SAVE_SLOTS,
     ON_VINE,
+    PAGE,
     PAGE_SIZE,
     PLAYER_SPEED,
     PLAYER_STATE,
@@ -63,12 +65,14 @@ from .constants import (
     SCREEN_WIDTH,
     STARMAN_TIMER,
     STOPWATCH_TIMER,
+    SUB_AREA,
     SUBSPACE_COINS,
     SUBSPACE_STATUS,
     SUBSPACE_TIMER,
     VEGETABLES_PULLED,
     WORLD_NUMBER,
     Y_POSITION_WRAPAROUND_THRESHOLD,
+    GlobalCoordinate,
 )
 
 
@@ -333,6 +337,7 @@ class SuperMarioBros2Env(gym.Env):
         Returns:
             dict with game state information
         """
+        print(self.global_coordinate_system)
         return {
             'life': self.lives,
             'x_pos_global': self.x_position_global,
@@ -343,6 +348,10 @@ class SuperMarioBros2Env(gym.Env):
             'y_page': self.y_page,
             'world': self.world,
             'level': self.level,
+            'area': self.area,
+            'sub_area': self.sub_area,
+            'spawn_page': self.spawn_page,
+            'global_coordinates': self.global_coordinate_system,
             'character': self.character,
             'hearts': self.hearts,
             'cherries': self.cherries,
@@ -361,7 +370,6 @@ class SuperMarioBros2Env(gym.Env):
             'subspace_status': self.subspace_status,
             'level_transition': self.level_transition,
             'door_transition_timer': self.door_transition_timer,
-            'starman_timer': self.starman_timer,
             'enemies_defeated': self.enemies_defeated,
         }
 
@@ -458,6 +466,44 @@ class SuperMarioBros2Env(gym.Env):
         """Get current level string."""
         level_id = self._read_ram_safe(CURRENT_LEVEL, default=0)
         return LEVEL_NAMES.get(level_id, f"L-{level_id:02X}")
+
+    @property
+    def area(self) -> int:
+        """Get current area."""
+        area = self._read_ram_safe(AREA, default=0)
+        return area
+
+    @property
+    def sub_area(self) -> int:
+        """Get current sub-area."""
+        sub_area = self._read_ram_safe(SUB_AREA, default=0)
+        return sub_area
+
+    @property
+    def spawn_page(self) -> int:
+        """Get current spawn page/entry point."""
+        page = self._read_ram_safe(PAGE, default=0)
+        return page
+
+    @property
+    def global_coordinate_system(self) -> GlobalCoordinate:
+        """Get global coordinate system combining level structure with player position.
+
+        Returns a 4-tuple coordinate system: (Area, Sub-area, Global_X, Global_Y)
+
+        This provides a unified positioning system that combines:
+        - Level structure: Area, Sub-area (from memory addresses $04E7-$04E8)
+        - Player position: Global X and Y coordinates in the game world
+
+        Returns:
+            GlobalCoordinate: NamedTuple with area, sub_area, global_x, global_y
+        """
+        return GlobalCoordinate(
+            area=self.area,
+            sub_area=self.sub_area,
+            global_x=self.x_position_global,
+            global_y=self.y_position_global
+        )
 
     @property
     def character(self) -> int:
