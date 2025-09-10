@@ -44,7 +44,6 @@ COMPLEX_ACTIONS = [
     ['down'],  # Charge super jump (hold 77+ frames then press A)
     ['down', 'B'],  # Pick up from ground
     ['up'],  # Enter door
-    ['up', 'B'],  # Enter door with B held
     ['A'],  # Jump
     ['B'],  # Pick up/throw
     ['A', 'B'],  # Jump and throw

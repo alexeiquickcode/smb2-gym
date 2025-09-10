@@ -1,4 +1,4 @@
-"""Comprehensive info display module for Super Mario Bros 2."""
+"""Info display module for Super Mario Bros 2."""
 
 from typing import Any
 
@@ -42,9 +42,12 @@ def draw_info(
         f"Position (Local):",
         f"  X: {info['x_pos_local']}",
         f"  Y: {info['y_pos_local']}",
-        f"Position (Global):",
-        f"  X: {info['x_pos_global']}",
-        f"  Y: {info['y_pos_global']}",
+        f"Global Coordinates:",
+        f"  Area: {info['global_coordinates'].area}",
+        f"  Sub-area: {info['global_coordinates'].sub_area}",
+        f"  Spawn Page: {info['spawn_page']}",
+        f"  Global X: {info['x_pos_global']}",
+        f"  Global Y: {info['y_pos_global']}",
         f"Speed: {info['player_speed']}",
         f"On Vine: {'Yes' if info['on_vine'] else 'No'}",
     ]
@@ -66,58 +69,27 @@ def draw_info(
     # Column 3 - Timers & Power-ups
     col3_texts = [
         f"Power-ups & Timers:",
-        f"  Starman: {info['starman_timer']}{'⭐' if info['starman_timer'] > 0 else ''}",
+        f"  Starman: {info['starman_timer']}",
         f"  Subspace: {info['subspace_timer']}",
-        f"  Stopwatch: {info['stopwatch_timer']}{'⏱️' if info['stopwatch_timer'] > 0 else ''}",
-        f"  Float: {info['float_timer']}{'🎈' if info['float_timer'] > 0 else ''}",
+        f"  Stopwatch: {info['stopwatch_timer']}",
+        f"  Float Available: {info['float_timer']}/60",
         "",
         f"Status Indicators:",
         f"  Starman Active: {'YES' if info['starman_timer'] > 0 else 'No'}",
         f"  Stopwatch Active: {'YES' if info['stopwatch_timer'] > 0 else 'No'}",
-        f"  Peach Float: {'YES' if info['float_timer'] > 0 else 'No'}",
-    ]
-
-    # Column 4 - Progress & Stats
-    levels = info['levels_finished']
-    col4_texts = [
-        f"Levels Completed:",
-        f"  Mario: {levels['mario']}",
-        f"  Peach: {levels['peach']}",
-        f"  Toad: {levels['toad']}",
-        f"  Luigi: {levels['luigi']}",
-        "",
-        f"Character Abilities:",
-        f"  Mario: Balanced",
-        f"  Peach: Float",
-        f"  Toad: Strong+Fast",
-        f"  Luigi: High Jump",
+        f"  Can Float: {'YES' if info['float_timer'] > 0 and info['character'] == 1 else 'No'}",
     ]
 
     # Helper function to draw column
-    def draw_column(texts, x_pos, max_lines=12):
+    def draw_column(texts, x_pos, max_lines=16):
         for i, text in enumerate(texts[:max_lines]):
             if text:
-                # Color coding for special states
-                color = (255, 255, 255)  # Default white
-                if "YES" in text:
-                    color = (0, 255, 0)  # Green for active states
-                elif "⭐" in text or "⏱️" in text or "🎈" in text:
-                    color = (255, 255, 0)  # Yellow for active power-ups
-                elif text.startswith("  ") and any(
-                    word in text for word in ["Starman", "Stopwatch", "Float"]
-                ):
-                    color = (200, 200, 255)  # Light blue for power-up info
-                elif text.startswith("Character:"
-                                    ) or text.startswith("Lives:") or text.startswith("Hearts:"):
-                    color = (255, 200, 100)  # Orange for important stats
-
-                text_surface = font.render(text, True, color)
+                text_surface = font.render(text, True, (255, 255, 255))
                 screen.blit(text_surface, (x_pos, start_y + i * 20))
 
     draw_column(col1_texts, col_positions[0])
     draw_column(col2_texts, col_positions[1])
     draw_column(col3_texts, col_positions[2])
-    draw_column(col4_texts, col_positions[3])
 
 
 # ------------------------------------------------------------------------------

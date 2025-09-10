@@ -20,6 +20,8 @@ from .actions import (
     get_action_meanings,
 )
 from .app import InitConfig
+from .app.info_display import create_info_panel
+from .app.rendering import render_frame
 from .constants import (
     AREA,
     CHARACTER,
@@ -98,6 +100,7 @@ class SuperMarioBros2Env(gym.Env):
         action_type: ActionType = "simple",
         reset_on_life_loss: bool = False,
         use_save_state: bool = True,
+        render_fps: Optional[int] = None,
     ):
         """Initialize the SMB2 environment.
 
@@ -108,6 +111,7 @@ class SuperMarioBros2Env(gym.Env):
             action_type: Type of action space
             reset_on_life_loss: If True, episode terminates when Mario loses a life
             use_save_state: If False, start from beginning without loading save state
+            render_fps: FPS for human rendering (None = no limit, good for training)
         """
         super().__init__()
 
@@ -116,13 +120,14 @@ class SuperMarioBros2Env(gym.Env):
         self.reset_on_life_loss = reset_on_life_loss
         self.use_save_state = use_save_state
         self.init_config = init_config
+        self.render_fps = render_fps
 
-        # Store relevant attributes for character/level mode
-        if self.init_config.mode == "character_level":
+        # Store relevant attributes (only meaningful for built-in ROM mode)
+        if not self.init_config.rom_path:  # Built-in ROM mode
             self.starting_level = self.init_config.level
             self.starting_level_id = self.init_config.level_id
             self.starting_character = self.init_config.character_id
-        else:
+        else:  # Custom ROM mode
             self.starting_level = None
             self.starting_level_id = None
             self.starting_character = None
@@ -137,6 +142,11 @@ class SuperMarioBros2Env(gym.Env):
         self._init_emulator()
         self._init_spaces()
         self._init_state_tracking()
+
+        # Initialize rendering attributes but defer pygame init until needed
+        self._screen = None
+        self._clock = None
+        self._pygame_initialized = False
 
     def _init_emulator(self) -> None:
         """Initialize the NES emulator and load ROM."""
@@ -176,6 +186,36 @@ class SuperMarioBros2Env(gym.Env):
         self._done = False
         self._episode_steps = 0
         self._previous_lives = None  # Track lives to detect life loss
+
+    def _init_rendering(self) -> None:
+        """Initialize pygame rendering when first needed."""
+        if self._pygame_initialized or self.render_mode != 'human':
+            return
+
+        import pygame
+        pygame.init()
+
+        from .app.info_display import get_required_info_height
+        from .constants import (
+            DEFAULT_SCALE,
+            FONT_SIZE_BASE,
+            SCREEN_HEIGHT,
+            SCREEN_WIDTH,
+        )
+
+        self._scale = DEFAULT_SCALE
+        self._width = SCREEN_WIDTH * self._scale
+        self._height = SCREEN_HEIGHT * self._scale
+        self._info_height = get_required_info_height(self._scale)
+
+        self._screen = pygame.display.set_mode((self._width, self._height + self._info_height))
+        pygame.display.set_caption("Super Mario Bros 2")
+        self._clock = pygame.time.Clock() if self.render_fps is not None else None
+
+        # Setup font for info display
+        self._font_size = FONT_SIZE_BASE * self._scale // 2
+        self._font = pygame.font.Font(None, self._font_size)
+        self._pygame_initialized = True
 
     # ---- Primary Gym methods ---------------------------------------
 
@@ -236,9 +276,8 @@ class SuperMarioBros2Env(gym.Env):
 
         # Initialize life tracking for detecting life loss
         self._previous_lives = self.lives
-
-        # Initialize level completion tracking
-        self._prev_levels_finished_total = sum(info['levels_finished'].values())
+        if self.render_mode == 'human':
+            self.render()
 
         return np.array(obs), info
 
@@ -277,30 +316,18 @@ class SuperMarioBros2Env(gym.Env):
         # Update life tracking for next step
         self._previous_lives = self.lives
 
-        # 4. Check for level completion
-        # Since LEVEL_TRANSITION at 0x04EC changes too quickly (sub-frame),
-        # we detect level completion by monitoring the levels_finished counter
-        level_completed = False
-
-        if hasattr(self, '_prev_levels_finished_total'):
-            current_total = sum(info['levels_finished'].values())
-            if current_total > self._prev_levels_finished_total:
-                level_completed = True
-            self._prev_levels_finished_total = current_total
-        else:
-            self._prev_levels_finished_total = sum(info['levels_finished'].values())
-
-        if level_completed:
-            info['level_completed'] = True
-
-        # 5. Check termination
-        terminated = self.is_game_over or life_lost or level_completed
+        # 4. Check termination
+        terminated = self.is_game_over or life_lost
         truncated = (
             self.max_episode_steps is not None and self._episode_steps >= self.max_episode_steps
         )
 
         self._done = terminated or truncated
         reward = 0.0  # Always return 0 reward
+
+        # Render if in human mode
+        if self.render_mode == 'human':
+            self.render()
 
         return np.array(obs), reward, terminated, truncated, info
 
@@ -311,7 +338,29 @@ class SuperMarioBros2Env(gym.Env):
             RGB array for display, None if no render mode
         """
         if self.render_mode == 'human':
-            return self._nes.get_observation()
+            # Lazy load
+            if not self._pygame_initialized:
+                self._init_rendering()
+
+            obs = self._nes.get_observation()
+            if self._screen is not None:
+                import pygame
+
+                # Handle pygame events to prevent window freezing
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        return obs
+
+                # Render
+                render_frame(self._screen, obs, self._width, self._height)
+                create_info_panel(self._screen, self.info, self._font, self._height, self._width)
+
+                pygame.display.flip()
+                # Only limit FPS if render_fps is specified
+                if self._clock is not None and self.render_fps is not None:
+                    self._clock.tick(self.render_fps)
+
+            return obs
         return None
 
     def _read_ram_safe(self, address: int, default: int = 0) -> int:
@@ -418,7 +467,7 @@ class SuperMarioBros2Env(gym.Env):
 
     @property
     def x_position(self) -> int:
-        """Get player global X position."""
+        """Get player local X position (on current page)."""
         x_pos = self._read_ram_safe(PLAYER_X_POSITION, default=0)
         return x_pos
 
@@ -445,7 +494,7 @@ class SuperMarioBros2Env(gym.Env):
 
     @property
     def y_position(self) -> int:
-        """Get player global Y position."""
+        """Get player local Y position (on current page)."""
         y_pos = self._read_ram_safe(PLAYER_Y_POSITION, default=0)
         return y_pos
 
@@ -527,8 +576,8 @@ class SuperMarioBros2Env(gym.Env):
         elif life_meter == 0x3F:
             return 4
         else:
-            # If value doesn't match expected pattern, use lower nibble + 1
-            hearts = (life_meter & 0x0F) + 1
+            # If value doesn't match expected pattern, use upper nibble + 1
+            hearts = ((life_meter & 0xF0) >> 4) + 1
             if 1 <= hearts <= MAX_HEARTS:
                 return hearts
             return 2  # Default
@@ -601,11 +650,11 @@ class SuperMarioBros2Env(gym.Env):
 
     @property
     def float_timer(self) -> int:
-        """Get Princess float timer."""
+        """Get Princess float timer (available float time, max 60 frames = 1 second)."""
         return self._read_ram_safe(FLOAT_TIMER, default=0)
 
     @property
-    def levels_finished(self) -> dict:
+    def levels_finished(self) -> dict[str, int]:
         """Get levels finished per character."""
         return {
             'mario': self._read_ram_safe(LEVELS_FINISHED_MARIO, default=0),
@@ -628,16 +677,6 @@ class SuperMarioBros2Env(gym.Env):
     def subspace_status(self) -> int:
         """Get subspace status (0=not in subspace, 2=in subspace)."""
         return self._read_ram_safe(SUBSPACE_STATUS, default=0)
-
-    @property
-    def door_transition_timer(self) -> int:
-        """Get door transition timer (counts up during door transitions)."""
-        return self._read_ram_safe(DOOR_TRANSITION_TIMER, default=0)
-
-    @property
-    def starman_timer(self) -> int:
-        """Get starman timer value (also at 0x04E0)."""
-        return self._read_ram_safe(STARMAN_TIMER, default=0)
 
     @property
     def level_transition(self) -> int:
@@ -692,7 +731,7 @@ class SuperMarioBros2Env(gym.Env):
 
     # ---- Other bindings --------------------------------------------
 
-    def get_action_meanings(self) -> list:
+    def get_action_meanings(self) -> list[list[str]]:
         """Get the meanings of actions for this environment.
 
         Returns:
@@ -737,3 +776,11 @@ class SuperMarioBros2Env(gym.Env):
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Save state file not found: {filepath}")
         self._nes.load_state_from_path(filepath)
+
+    def close(self) -> None:
+        """Close the environment and clean up resources."""
+        if hasattr(self, '_pygame_initialized') and self._pygame_initialized:
+            import pygame
+            pygame.quit()
+            self._screen = None
+            self._pygame_initialized = False

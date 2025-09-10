@@ -13,7 +13,7 @@ smb2_gym = ["_nes/**/*"]
 
 [project]
 name = "smb2-gym"
-version = "0.1.832111"
+version = "0.2.0"
 authors = [{ name = "Alexei Quick" }]
 description = "Super Mario Bros 2 (Europe) Gymnasium Environment"
 readme = "README.md"
@@ -44,7 +44,7 @@ dependencies = [
 "Bug Tracker" = "https://github.com/alexeiquickcode/smb2-gym/issues"
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "isort", "yapf", "basedpyright"]
+dev = ["pytest", "isort", "yapf", "basedpyright"]
 
 [project.scripts]
 smb2-play = "smb2_gym.play_human:main"

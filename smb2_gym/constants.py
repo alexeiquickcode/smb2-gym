@@ -11,26 +11,26 @@ from typing import NamedTuple
 
 class GlobalCoordinate(NamedTuple):
     """Global coordinate system combining level structure with player position.
-    
+
     Represents a 4-tuple coordinate system: (Area, Sub-area, Global_X, Global_Y)
-    
+
     This coordinate system provides a unified way to track the player's location
     within the level structure and their exact position in the game world:
-    
+
     Level Structure:
     - Area: Broad game regions (e.g., different worlds or major sections)
     - Sub-area: Subdivisions within an area (e.g., main level vs sub-world)
-    
+
     World Position:
     - Global X: Absolute horizontal position in the level 
     - Global Y: Absolute vertical position in the level
-    
+
     Args:
         area: Current area from memory address $04E7
         sub_area: Current sub-area from memory address $04E8  
         global_x: Player's global X position (x_page * PAGE_SIZE + x_position)
         global_y: Player's global Y position (y_page * PAGE_SIZE + y_position)
-        
+
     Example:
         coord = GlobalCoordinate(area=1, sub_area=0, global_x=1024, global_y=192)
         # Represents area 1, sub-area 0, position (1024, 192)
@@ -40,11 +40,11 @@ class GlobalCoordinate(NamedTuple):
     global_x: int
     global_y: int
 
+
 # Display/Rendering constants
 SCREEN_WIDTH = 256
 SCREEN_HEIGHT = 240
 DEFAULT_SCALE = 3
-FPS = 60
 FONT_SIZE_BASE = 18
 WINDOW_CAPTION = "Super Mario Bros 2"
 
@@ -57,11 +57,6 @@ BUTTON_UP = 4
 BUTTON_DOWN = 5
 BUTTON_LEFT = 6
 BUTTON_RIGHT = 7
-
-# Action types
-ACTION_TYPE_SIMPLE = "simple"
-ACTION_TYPE_COMPLEX = "complex"
-ACTION_TYPE_ALL = "all"
 
 # Game limits
 MAX_CHERRIES = 20
@@ -92,9 +87,9 @@ CHARACTER = 0x008F  # 0=Mario, 1=Peach, 2=Toad, 3=Luigi
 CURRENT_LEVEL = 0x0531  # 00-13 (levels 1-1 to 7-2)
 WORLD_NUMBER = 0x0635
 LEVEL_TILESET = 0x06F7
-AREA = 0x04E7  # Current area - part of global coordinate system (A, B, C, X, Y)
-SUB_AREA = 0x04E8  # Current sub-area - subdivisions within area for coordinate system  
-PAGE = 0x04E9  # Current page - memory organization boundary for coordinate system
+AREA = 0x04E7  # Current area - part of global coordinate system
+SUB_AREA = 0x04E8  # Current sub-area - subdivisions within area for coordinate system
+PAGE = 0x04E9  # Current page - where the player enters the area from
 
 # Collectibles
 CHERRIES = 0x062A
@@ -106,7 +101,7 @@ STARMAN_TIMER = 0x04E0
 SUBSPACE_TIMER = 0x04B7
 STOPWATCH_TIMER = 0x04FF
 SUBSPACE_STATUS = 0x0628  # 00=no, 02=yes
-FLOAT_TIMER = 0x0553  # Peach floating ability
+FLOAT_TIMER = 0x0553  # NOTE: Peach floating ability. Seems to be static?
 DOOR_TRANSITION_TIMER = 0x04BD  # Time counts up for how long the door takes to open
 LEVEL_TRANSITION = 0x04EC  # Level transition state
 
@@ -131,10 +126,6 @@ ENEMY_Y_POS = [0x0033, 0x0034, 0x0035, 0x0036, 0x0037]
 ENEMY_ID = [0x0090, 0x0091, 0x0092, 0x0093, 0x0094]
 ENEMY_HEALTH = [0x0465, 0x0466, 0x0467, 0x0468, 0x0469]
 ENEMIES_DEFEATED = 0x04AD  # Count of enemies defeated (for heart spawning)
-
-# Input
-CONTROLLER_1_PRESSED = 0x00F5
-CONTROLLER_1_HELD = 0x00F7
 
 # Character names for display
 CHARACTER_NAMES = {0: "Mario", 1: "Peach", 2: "Toad", 3: "Luigi"}
