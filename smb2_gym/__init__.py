@@ -19,7 +19,7 @@ from .app import (
 from .constants import *
 from .smb2_env import SuperMarioBros2Env
 
-__version__ = "0.2.0"
+__version__ = "0.2.2"
 __all__ = [
     "SuperMarioBros2Env",
     "InitConfig",
