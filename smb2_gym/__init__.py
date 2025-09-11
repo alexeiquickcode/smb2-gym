@@ -11,6 +11,7 @@ from .actions import (
     get_action_meanings,
 )
 from .app import (
+    InitConfig,
     create_info_panel,
     draw_info,
     get_required_info_height,
@@ -21,6 +22,7 @@ from .smb2_env import SuperMarioBros2Env
 __version__ = "0.2.0"
 __all__ = [
     "SuperMarioBros2Env",
+    "InitConfig",
     "SIMPLE_ACTIONS",
     "COMPLEX_ACTIONS",
     "ActionType",
