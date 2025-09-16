@@ -69,10 +69,6 @@ class InitConfig:
         char_map = {v.lower(): k for k, v in CHARACTER_NAMES.items()}
         name_lower = name.lower()
 
-        # Handle common aliases
-        if name_lower == "princess":
-            name_lower = "peach"
-
         if name_lower not in char_map:
             valid_names = list(char_map.keys())
             raise ValueError(f"Invalid character '{name}'. Valid: {', '.join(valid_names)}")

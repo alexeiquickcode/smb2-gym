@@ -90,8 +90,6 @@ class SuperMarioBros2Env(gym.Env):
     based on the RAM values available in the info dict.
     """
 
-    metadata = {'render_modes': ['human'], 'render_fps': 60}
-
     def __init__(
         self,
         init_config: InitConfig,
@@ -99,7 +97,6 @@ class SuperMarioBros2Env(gym.Env):
         max_episode_steps: Optional[int] = None,
         action_type: ActionType = "simple",
         reset_on_life_loss: bool = False,
-        use_save_state: bool = True,
         render_fps: Optional[int] = None,
     ):
         """Initialize the SMB2 environment.
@@ -110,7 +107,6 @@ class SuperMarioBros2Env(gym.Env):
             max_episode_steps: Maximum steps per episode (for truncation)
             action_type: Type of action space
             reset_on_life_loss: If True, episode terminates when Mario loses a life
-            use_save_state: If False, start from beginning without loading save state
             render_fps: FPS for human rendering (None = no limit, good for training)
         """
         super().__init__()
@@ -118,7 +114,6 @@ class SuperMarioBros2Env(gym.Env):
         self.render_mode = render_mode
         self.max_episode_steps = max_episode_steps
         self.reset_on_life_loss = reset_on_life_loss
-        self.use_save_state = use_save_state
         self.init_config = init_config
         self.render_fps = render_fps
 
@@ -167,7 +162,10 @@ class SuperMarioBros2Env(gym.Env):
         """Initialize observation and action spaces."""
         # Define observation space
         self.observation_space = spaces.Box(
-            low=0, high=255, shape=(SCREEN_HEIGHT, SCREEN_WIDTH, 3), dtype=np.uint8
+            low=0,
+            high=255,
+            shape=(SCREEN_HEIGHT, SCREEN_WIDTH, 3),
+            dtype=np.uint8,
         )
 
         # Define action space based on action_type
@@ -242,16 +240,15 @@ class SuperMarioBros2Env(gym.Env):
         self._done = False
         self._episode_steps = 0
 
-        if self.use_save_state:
-            save_path = self.init_config.get_save_state_path()
+        save_path = self.init_config.get_save_state_path()
 
-            if save_path and not os.path.exists(save_path):
-                raise FileNotFoundError(f"Save state file not found: {save_path}")
+        if save_path and not os.path.exists(save_path):
+            raise FileNotFoundError(f"Save state file not found: {save_path}")
 
-            if save_path:
-                self.load_state_from_path(save_path)
+        if save_path:
+            self.load_state_from_path(save_path)
         else:
-            # When not using save state, navigate to character selection screen
+            # When no save state, navigate to character selection screen
             # Wait for title screen to appear
             for _ in range(120):  # 2 seconds
                 self._nes.step([False] * 8, render=False)
@@ -776,6 +773,28 @@ class SuperMarioBros2Env(gym.Env):
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Save state file not found: {filepath}")
         self._nes.load_state_from_path(filepath)
+
+    def set_frame_speed(self, speed: float) -> None:
+        """Set the frame speed for faster/slower emulation.
+
+        Args:
+            speed: Frame speed multiplier (1.0 = normal speed, 2.0 = 2x speed, etc.)
+                   Must be positive.
+
+        Raises:
+            ValueError: If speed is not positive
+        """
+        if speed <= 0.0:
+            raise ValueError("Frame speed must be positive")
+        self._nes.set_frame_speed(speed)
+
+    def get_frame_speed(self) -> float:
+        """Get the current frame speed multiplier.
+
+        Returns:
+            Current frame speed (1.0 = normal speed)
+        """
+        return self._nes.get_frame_speed()
 
     def close(self) -> None:
         """Close the environment and clean up resources."""

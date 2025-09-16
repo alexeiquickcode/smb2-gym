@@ -6,6 +6,10 @@ import pytest
 @pytest.mark.slow
 def test_random_actions_with_rendering(env_with_render):
     """Test the environment with random actions and rendering as shown in README."""
+
+    # Set frame speed to 10x for faster testing while still rendering
+    env_with_render.set_frame_speed(15.0)
+
     # Reset environment
     obs, info = env_with_render.reset()
 
@@ -18,8 +22,9 @@ def test_random_actions_with_rendering(env_with_render):
     assert 'y_pos_global' in info, "Info should contain 'y_pos_global' key"
 
     steps_completed = 0
-    # Run game loop for fewer steps in tests
-    for step in range(100):  # Reduced from 1000 for faster testing
+
+    # Run for 5000 frames at 10x speed with rendering
+    for step in range(5000):
         action = env_with_render.action_space.sample()
         obs, reward, terminated, truncated, info = env_with_render.step(action)
 
@@ -43,6 +48,10 @@ def test_random_actions_with_rendering(env_with_render):
 
 def test_random_actions_no_rendering(env_no_render):
     """Test the environment with random actions without rendering (faster)."""
+
+    # Set frame speed to 10x for faster testing
+    env_no_render.set_frame_speed(10.0)
+
     # Reset environment
     obs, info = env_no_render.reset()
 
@@ -53,8 +62,8 @@ def test_random_actions_no_rendering(env_no_render):
     episodes_completed = 0
     steps_total = 0
 
-    # Run for a reasonable number of steps
-    for step in range(500):
+    # Run for 5000 frames at 10x speed
+    for step in range(5000):
         action = env_no_render.action_space.sample()
         obs, reward, terminated, truncated, info = env_no_render.step(action)
 
