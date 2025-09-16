@@ -23,18 +23,6 @@ def env_no_render(basic_env_config):
     env.close()
 
 
-@pytest.fixture
-def env_with_render(basic_env_config):
-    """Create an environment with rendering (marked as slow)."""
-    env = SuperMarioBros2Env(
-        init_config=basic_env_config,
-        render_mode="human",
-        action_type="simple"
-    )
-    yield env
-    env.close()
-
-
 @pytest.fixture(scope="session")
 def cli_command():
     """CLI command name for testing."""

@@ -98,6 +98,7 @@ class SuperMarioBros2Env(gym.Env):
         action_type: ActionType = "simple",
         reset_on_life_loss: bool = False,
         render_fps: Optional[int] = None,
+        frame_method: str = "rgb",
     ):
         """Initialize the SMB2 environment.
 
@@ -108,6 +109,9 @@ class SuperMarioBros2Env(gym.Env):
             action_type: Type of action space
             reset_on_life_loss: If True, episode terminates when Mario loses a life
             render_fps: FPS for human rendering (None = no limit, good for training)
+            frame_method: Frame rendering method ('rgb', 'grayscale')
+                - 'rgb': RGB rendering
+                - 'grayscale': Grayscale rendering (faster, 67% less memory)
         """
         super().__init__()
 
@@ -116,6 +120,14 @@ class SuperMarioBros2Env(gym.Env):
         self.reset_on_life_loss = reset_on_life_loss
         self.init_config = init_config
         self.render_fps = render_fps
+
+        # Validate and store frame method
+        valid_frame_methods = ["rgb", "grayscale"]
+        if frame_method not in valid_frame_methods:
+            raise ValueError(
+                f"Invalid frame_method '{frame_method}'. Must be one of {valid_frame_methods}"
+            )
+        self.frame_method = frame_method
 
         # Store relevant attributes (only meaningful for built-in ROM mode)
         if not self.init_config.rom_path:  # Built-in ROM mode
@@ -149,8 +161,8 @@ class SuperMarioBros2Env(gym.Env):
         if not os.path.exists(rom_path):
             raise FileNotFoundError(f"ROM file not found: {rom_path}")
 
-        # Initialize TetaNES
-        self._nes = NesEnv(headless=False)
+        # Initialize TetaNES with frame rendering method
+        self._nes = NesEnv(headless=False, frame_method=self.frame_method)
 
         # Load ROM
         with open(rom_path, 'rb') as f:
@@ -160,13 +172,21 @@ class SuperMarioBros2Env(gym.Env):
 
     def _init_spaces(self) -> None:
         """Initialize observation and action spaces."""
-        # Define observation space
-        self.observation_space = spaces.Box(
-            low=0,
-            high=255,
-            shape=(SCREEN_HEIGHT, SCREEN_WIDTH, 3),
-            dtype=np.uint8,
-        )
+        # Define observation space based on frame method
+        if self.frame_method == "grayscale":
+            self.observation_space = spaces.Box(
+                low=0,
+                high=255,
+                shape=(SCREEN_HEIGHT, SCREEN_WIDTH),
+                dtype=np.uint8,
+            )
+        else:  # rgb
+            self.observation_space = spaces.Box(
+                low=0,
+                high=255,
+                shape=(SCREEN_HEIGHT, SCREEN_WIDTH, 3),
+                dtype=np.uint8,
+            )
 
         # Define action space based on action_type
         if self.action_type == "all":
@@ -274,7 +294,7 @@ class SuperMarioBros2Env(gym.Env):
         # Initialize life tracking for detecting life loss
         self._previous_lives = self.lives
         if self.render_mode == 'human':
-            self.render()
+            self.render(obs)
 
         return np.array(obs), info
 
@@ -324,12 +344,15 @@ class SuperMarioBros2Env(gym.Env):
 
         # Render if in human mode
         if self.render_mode == 'human':
-            self.render()
+            self.render(obs)
 
         return np.array(obs), reward, terminated, truncated, info
 
-    def render(self) -> Optional[np.ndarray]:
+    def render(self, obs: np.ndarray) -> Optional[np.ndarray]:
         """Render the environment.
+
+        Args:
+            obs: Observation array to render.
 
         Returns:
             RGB array for display, None if no render mode
@@ -339,7 +362,6 @@ class SuperMarioBros2Env(gym.Env):
             if not self._pygame_initialized:
                 self._init_rendering()
 
-            obs = self._nes.get_observation()
             if self._screen is not None:
                 import pygame
 

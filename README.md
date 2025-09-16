@@ -8,9 +8,10 @@ A Gymnasium environment for Super Mario Bros 2 (Europe/Doki Doki Panic version) 
 
 **Features:**
 - Curated action sets for faster training (`simple`, `complex`)
-- Comprehensive game state via info dict (40+ properties)
+- Comprehensive game state via info dict (30+ properties)
 - Multiple initialization modes (character/level, custom ROMs, save states)
 - Human-playable interface with keyboard controls
+- Up to XXX and XXX FPS rendered and non-rendered respectively
 
 A full list of the available RAM map properties is available at [Data Crystal](https://datacrystal.tcrf.net/wiki/Super_Mario_Bros._2_(NES)/RAM_map).
 

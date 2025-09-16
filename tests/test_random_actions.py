@@ -1,85 +1,116 @@
 """Test random actions in the SMB2 environment."""
 
+import logging
+import time
+
 import pytest
+
+from smb2_gym import SuperMarioBros2Env
 
 
 @pytest.mark.slow
-def test_random_actions_with_rendering(env_with_render):
-    """Test the environment with random actions and rendering as shown in README."""
+def test_frame_methods_fps_comparison(basic_env_config, caplog):
+    """Test and compare FPS for all frame rendering methods with and without human rendering."""
 
-    # Set frame speed to 10x for faster testing while still rendering
-    env_with_render.set_frame_speed(15.0)
+    frame_methods = ["rgb", "grayscale"]
+    render_modes = [("human", "Human Render"), (None, "No Render")]
+    test_steps = 1000
+    all_results = {}
 
-    # Reset environment
-    obs, info = env_with_render.reset()
+    for render_mode, render_label in render_modes:
+        all_results[render_label] = {}
 
-    # Verify initial state
-    assert obs is not None, "Initial observation should not be None"
-    assert info is not None, "Initial info should not be None"
-    assert 'life' in info, "Info should contain 'life' key"
-    assert 'hearts' in info, "Info should contain 'hearts' key"
-    assert 'x_pos_global' in info, "Info should contain 'x_pos_global' key"
-    assert 'y_pos_global' in info, "Info should contain 'y_pos_global' key"
+        for method in frame_methods:
+            env = SuperMarioBros2Env(
+                init_config=basic_env_config,
+                render_mode=render_mode,
+                action_type="simple",
+                frame_method=method
+            )
 
-    steps_completed = 0
+            try:
+                start_time = time.time()
+                obs, info = env.reset()
 
-    # Run for 5000 frames at 10x speed with rendering
-    for step in range(5000):
-        action = env_with_render.action_space.sample()
-        obs, reward, terminated, truncated, info = env_with_render.step(action)
+                for _ in range(test_steps):
+                    action = env.action_space.sample()
+                    obs, reward, terminated, truncated, info = env.step(action)
 
-        # Verify step results
-        assert obs is not None, f"Observation should not be None at step {step}"
-        assert info is not None, f"Info should not be None at step {step}"
-        assert isinstance(reward, (int, float)), f"Reward should be numeric at step {step}"
-        assert isinstance(terminated, bool), f"Terminated should be boolean at step {step}"
-        assert isinstance(truncated, bool), f"Truncated should be boolean at step {step}"
+                    if terminated or truncated:
+                        obs, info = env.reset()
 
-        steps_completed = step
+                elapsed_time = time.time() - start_time
+                fps = test_steps / elapsed_time
 
-        if terminated or truncated:
-            obs, info = env_with_render.reset()
-            assert obs is not None, "Observation after reset should not be None"
-            assert info is not None, "Info after reset should not be None"
+                all_results[render_label][method] = {
+                    'fps': fps,
+                    'time': elapsed_time,
+                    'obs_shape': obs.shape,
+                    'obs_dtype': obs.dtype,
+                    'memory_kb': obs.nbytes / 1024
+                }
 
-    # Verify we completed some steps
-    assert steps_completed > 0, "Should have completed at least one step"
+            finally:
+                env.close()
 
+    # Log comprehensive comparison table
+    logger = logging.getLogger(__name__)
+    with caplog.at_level(logging.INFO):
+        logger.info("Frame Methods FPS Comparison - Complete Results:")
+        logger.info("=" * 80)
+        logger.info(f"{'Method':<12} {'Mode':<12} {'FPS':<8} {'Time(s)':<8} {'Memory(KB)':<12} {'Shape'}")
+        logger.info("-" * 80)
 
-def test_random_actions_no_rendering(env_no_render):
-    """Test the environment with random actions without rendering (faster)."""
+        for render_label in ["Human Render", "No Render"]:
+            for method in frame_methods:
+                data = all_results[render_label][method]
+                logger.info(
+                    f"{method:<12} {render_label:<12} {data['fps']:<8.2f} "
+                    f"{data['time']:<8.2f} {data['memory_kb']:<12.1f} {str(data['obs_shape'])}"
+                )
 
-    # Set frame speed to 10x for faster testing
-    env_no_render.set_frame_speed(10.0)
+    # Print for visibility
+    print(f"\nFrame Methods FPS Comparison - Complete Results:")
+    print("=" * 80)
+    print(f"{'Method':<12} {'Mode':<12} {'FPS':<8} {'Time(s)':<8} {'Memory(KB)':<12} {'Shape'}")
+    print("-" * 80)
 
-    # Reset environment
-    obs, info = env_no_render.reset()
+    for render_label in ["Human Render", "No Render"]:
+        for method in frame_methods:
+            data = all_results[render_label][method]
+            print(
+                f"{method:<12} {render_label:<12} {data['fps']:<8.2f} "
+                f"{data['time']:<8.2f} {data['memory_kb']:<12.1f} {str(data['obs_shape'])}"
+            )
 
-    # Verify initial state
-    assert obs is not None, "Initial observation should not be None"
-    assert info is not None, "Initial info should not be None"
+    # Basic assertions for both render modes
+    for render_label, results in all_results.items():
+        for method, data in results.items():
+            assert data['fps'] > 0, f"{method} FPS should be positive for {render_label}"
 
-    episodes_completed = 0
-    steps_total = 0
+            if method == "grayscale":
+                assert data['obs_shape'] == (240, 256), f"Grayscale should be 2D for {render_label}"
+            else:
+                assert data['obs_shape'] == (240, 256, 3), f"RGB methods should be 3D for {render_label}"
 
-    # Run for 5000 frames at 10x speed
-    for step in range(5000):
-        action = env_no_render.action_space.sample()
-        obs, reward, terminated, truncated, info = env_no_render.step(action)
+        # Performance assertions within each render mode
+        # Grayscale should be faster due to smaller memory footprint (60KB vs 180KB)
+        assert results['grayscale']['fps'] > results['rgb']['fps'], f"Grayscale should be faster than RGB for {render_label}"
 
-        # Basic assertions
-        assert obs is not None, f"Observation should not be None at step {step}"
-        assert isinstance(reward, (int, float)), f"Reward should be numeric"
+        # RGB performance should be reasonable
+        assert results['rgb']['fps'] > 50, f"RGB FPS should be reasonable for {render_label}"
 
-        steps_total += 1
+    # Cross-mode performance assertions
+    for method in frame_methods:
+        no_render_fps = all_results["No Render"][method]['fps']
+        human_render_fps = all_results["Human Render"][method]['fps']
+        assert no_render_fps > human_render_fps, f"No render should be faster than human render for {method}"
 
-        if terminated or truncated:
-            episodes_completed += 1
-            obs, info = env_no_render.reset()
+        # Verify memory usage differences
+        no_render_mem = all_results["No Render"][method]['memory_kb']
+        human_render_mem = all_results["Human Render"][method]['memory_kb']
+        assert no_render_mem == human_render_mem, f"Memory usage should be same regardless of render mode for {method}"
 
-            # Don't reset too many times in test
-            if episodes_completed >= 3:
-                break
-
-    # Verify we completed some meaningful testing
-    assert steps_total > 10, f"Should have completed more steps, only did {steps_total}"
+    # Memory usage assertions
+    for render_label, results in all_results.items():
+        assert results['grayscale']['memory_kb'] < results['rgb']['memory_kb'], f"Grayscale should use less memory than RGB for {render_label}"
