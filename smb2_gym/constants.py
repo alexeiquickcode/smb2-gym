@@ -90,6 +90,9 @@ LEVEL_TILESET = 0x06F7
 AREA = 0x04E7  # Current area - part of global coordinate system
 SUB_AREA = 0x04E8  # Current sub-area - subdivisions within area for coordinate system
 PAGE = 0x04E9  # Current page - where the player enters the area from
+CURRENT_PAGE_POSITION = 0x0535  # Current page position in sub-area
+TOTAL_PAGES_IN_SUB_AREA = 0x053F  # Total number of pages in current sub-area
+SCROLL_DIRECTION = 0x00EC  # Scroll direction (00=horizontal, 01=vertical)
 
 # Collectibles
 CHERRIES = 0x062A

@@ -9,7 +9,7 @@ from ..constants import CHARACTER_NAMES
 
 def get_required_info_height(scale: int = 1) -> int:
     """Get the minimum height needed for the info display."""
-    return 240 * scale // 2  # Height for 4 columns with padding, scaled appropriately
+    return 260 * scale // 2  # Height for 4 columns with padding, scaled appropriately
 
 
 def draw_info(
@@ -48,6 +48,7 @@ def draw_info(
         f"  Spawn Page: {info['spawn_page']}",
         f"  Global X: {info['x_pos_global']}",
         f"  Global Y: {info['y_pos_global']}",
+        f"  Vertical Area: {'Yes' if info['is_vertical_area'] else 'No'}",
         f"Speed: {info['player_speed']}",
         f"On Vine: {'Yes' if info['on_vine'] else 'No'}",
     ]
@@ -56,6 +57,10 @@ def draw_info(
     col2_texts = [
         f"World: {info['world']}",
         f"Level: {info['level']}",
+        "",
+        f"Page Info:",
+        f"  Current: {info['current_page_position']}",
+        f"  Total: {info['total_pages_in_sub_area']}",
         "",
         f"Collectibles:",
         f"  Cherries: {info['cherries']}",
@@ -81,7 +86,7 @@ def draw_info(
     ]
 
     # Helper function to draw column
-    def draw_column(texts, x_pos, max_lines=16):
+    def draw_column(texts, x_pos, max_lines=18):
         for i, text in enumerate(texts[:max_lines]):
             if text:
                 text_surface = font.render(text, True, (255, 255, 255))

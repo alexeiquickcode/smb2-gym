@@ -29,6 +29,7 @@ from .constants import (
     CHERRIES,
     CONTINUES,
     CURRENT_LEVEL,
+    CURRENT_PAGE_POSITION,
     DOOR_TRANSITION_TIMER,
     ENEMIES_DEFEATED,
     ENEMY_HEALTH,
@@ -65,12 +66,14 @@ from .constants import (
     PLAYER_Y_POSITION,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
+    SCROLL_DIRECTION,
     STARMAN_TIMER,
     STOPWATCH_TIMER,
     SUB_AREA,
     SUBSPACE_COINS,
     SUBSPACE_STATUS,
     SUBSPACE_TIMER,
+    TOTAL_PAGES_IN_SUB_AREA,
     VEGETABLES_PULLED,
     WORLD_NUMBER,
     Y_POSITION_WRAPAROUND_THRESHOLD,
@@ -418,6 +421,9 @@ class SuperMarioBros2Env(gym.Env):
             'area': self.area,
             'sub_area': self.sub_area,
             'spawn_page': self.spawn_page,
+            'current_page_position': self.current_page_position,
+            'total_pages_in_sub_area': self.total_pages_in_sub_area,
+            'is_vertical_area': self.is_vertical_area,
             'global_coordinates': self.global_coordinate_system,
             'character': self.character,
             'hearts': self.hearts,
@@ -551,6 +557,24 @@ class SuperMarioBros2Env(gym.Env):
         """Get current spawn page/entry point."""
         page = self._read_ram_safe(PAGE, default=0)
         return page
+
+    @property
+    def current_page_position(self) -> int:
+        """Get current page position in sub-area."""
+        page_pos = self._read_ram_safe(CURRENT_PAGE_POSITION, default=0)
+        return page_pos
+
+    @property
+    def total_pages_in_sub_area(self) -> int:
+        """Get total number of pages in the current sub-area."""
+        total_pages = self._read_ram_safe(TOTAL_PAGES_IN_SUB_AREA, default=0)
+        return total_pages
+
+    @property
+    def is_vertical_area(self) -> bool:
+        """Check if current area has vertical scrolling."""
+        direction = self._read_ram_safe(SCROLL_DIRECTION, default=0)
+        return direction == 1
 
     @property
     def global_coordinate_system(self) -> GlobalCoordinate:

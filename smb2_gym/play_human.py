@@ -37,7 +37,6 @@ def play_human(
     custom_rom: Optional[str] = None,
     custom_state: Optional[str] = None,
     scale: int = DEFAULT_SCALE,
-    use_save_state: bool = True
 ) -> None:
     """Play Super Mario Bros 2 with keyboard controls.
 
@@ -49,7 +48,6 @@ def play_human(
         custom_rom: Custom ROM file path - used with custom_state
         custom_state: Custom save state file path - used with custom_rom
         scale: Display scale factor
-        use_save_state: If False, start from beginning of game
     """
     pygame.init()
 
@@ -63,7 +61,7 @@ def play_human(
     print(config.describe())
 
     # Create env
-    env = SuperMarioBros2Env(init_config=config, use_save_state=use_save_state)
+    env = SuperMarioBros2Env(init_config=config, frame_method="grayscale")
 
     # Setup pygame
     width, height = SCREEN_WIDTH * scale, SCREEN_HEIGHT * scale
@@ -283,21 +281,18 @@ def main() -> None:
                 custom_rom=args.custom_rom,
                 custom_state=args.custom_state if not args.no_save_state else None,
                 scale=args.scale,
-                use_save_state=not args.no_save_state
             )
         elif args.rom:  # Built-in ROM variant mode
             play_human(
                 custom_rom=config.rom_path,
                 custom_state=config.save_state_path,
                 scale=args.scale,
-                use_save_state=not args.no_save_state
             )
         else:
             play_human(
                 level=args.level,
                 character=args.char,
                 scale=args.scale,
-                use_save_state=not args.no_save_state
             )
     except ValueError as e:
         parser.error(str(e))
