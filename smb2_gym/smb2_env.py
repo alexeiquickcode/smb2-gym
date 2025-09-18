@@ -32,12 +32,20 @@ from .constants import (
     CURRENT_PAGE_POSITION,
     DOOR_TRANSITION_TIMER,
     ENEMIES_DEFEATED,
+    ENEMY_DEAD,
     ENEMY_HEALTH,
     ENEMY_ID,
+    ENEMY_INVISIBLE,
+    ENEMY_SPEED,
+    ENEMY_VISIBILITY,
+    ENEMY_VISIBLE,
+    ENEMY_X_PAGE,
     ENEMY_X_POS,
+    ENEMY_Y_PAGE,
     ENEMY_Y_POS,
     FLOAT_TIMER,
     GAME_INIT_FRAMES,
+    INVULNERABILITY_TIMER,
     ITEM_HOLDING,
     ITEM_PULLED,
     LEVEL_NAMES,
@@ -435,6 +443,7 @@ class SuperMarioBros2Env(gym.Env):
             'starman_timer': self.starman_timer,
             'subspace_timer': self.subspace_timer,
             'stopwatch_timer': self.stopwatch_timer,
+            'invulnerability_timer': self.invulnerability_timer,
             'holding_item': self.holding_item,
             'item_pulled': self.item_pulled,
             'continues': self.continues,
@@ -448,6 +457,16 @@ class SuperMarioBros2Env(gym.Env):
             'level_completed': self.level_completed,
             'door_transition_timer': self.door_transition_timer,
             'enemies_defeated': self.enemies_defeated,
+            'enemy_x_positions': self.enemy_x_positions,
+            'enemy_y_positions': self.enemy_y_positions,
+            'enemy_speeds': self.enemy_speeds,
+            'enemy_visibility_states': self.enemy_visibility_states,
+            'enemy_x_positions_global': self.enemy_x_positions_global,
+            'enemy_y_positions_global': self.enemy_y_positions_global,
+            'enemy_x_pages': self.enemy_x_pages,
+            'enemy_y_pages': self.enemy_y_pages,
+            'enemy_x_positions_relative': self.enemy_x_positions_relative,
+            'enemy_y_positions_relative': self.enemy_y_positions_relative,
         }
 
     @property
@@ -578,7 +597,7 @@ class SuperMarioBros2Env(gym.Env):
     def is_vertical_area(self) -> bool:
         """Check if current area has vertical scrolling."""
         direction = self._read_ram_safe(SCROLL_DIRECTION, default=0)
-        return direction == 1
+        return not bool(direction)
 
     @property
     def global_coordinate_system(self) -> GlobalCoordinate:
@@ -663,6 +682,11 @@ class SuperMarioBros2Env(gym.Env):
         return self._read_ram_safe(STOPWATCH_TIMER, default=0)
 
     @property
+    def invulnerability_timer(self) -> int:
+        """Get invulnerability timer (time left until character becomes vulnerable)."""
+        return self._read_ram_safe(INVULNERABILITY_TIMER, default=0)
+
+    @property
     def enemies_defeated(self) -> int:
         """Get count of enemies defeated (for heart spawning)."""
         return self._read_ram_safe(ENEMIES_DEFEATED, default=0)
@@ -687,8 +711,9 @@ class SuperMarioBros2Env(gym.Env):
 
     @property
     def player_speed(self) -> int:
-        """Get player horizontal speed."""
-        return self._read_ram_safe(PLAYER_SPEED, default=0)
+        """Get player horizontal speed (signed: positive=right, negative=left)."""
+        speed = self._read_ram_safe(PLAYER_SPEED, default=0)
+        return speed if speed < 128 else speed - 256
 
     @property
     def on_vine(self) -> bool:
@@ -744,7 +769,7 @@ class SuperMarioBros2Env(gym.Env):
         3 - end level, go to bonus game (level completed)
         4 - warp
         """
-        # This will almost always return 0 due to sub-frame clearing
+        # This will almost always return 0 due to sub-frame clearing? TODO: Delete
         return self._read_ram_safe(LEVEL_TRANSITION, default=0)
 
     @property
@@ -764,6 +789,192 @@ class SuperMarioBros2Env(gym.Env):
             ):
                 return True
         return False
+
+    @property
+    def enemy_visibility_states(self) -> list[int]:
+        """Get visibility states of enemies 1-5.
+
+        Returns:
+            List of 5 enemy visibility states (index 0 = enemy 5, index 4 = enemy 1)
+            0 = Invisible, 1 = Visible, 2 = Dead
+        """
+        return [self._read_ram_safe(addr, default=0) for addr in ENEMY_VISIBILITY]
+
+    @property
+    def enemy_x_positions(self) -> list[int]:
+        """Get X positions of enemies 1-5 on the current page.
+
+        Returns:
+            List of 5 enemy X positions (index 0 = enemy 5, index 4 = enemy 1)
+            Returns -1 for invisible or dead enemies
+        """
+        positions = []
+        visibility_states = self.enemy_visibility_states
+        for i, addr in enumerate(ENEMY_X_POS):
+            if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
+                positions.append(-1)
+            else:
+                positions.append(self._read_ram_safe(addr, default=0))
+        return positions
+
+    @property
+    def enemy_y_positions(self) -> list[int]:
+        """Get Y positions of enemies 1-5 on the current page.
+
+        Returns:
+            List of 5 enemy Y positions (index 0 = enemy 5, index 4 = enemy 1)
+            Returns -1 for invisible or dead enemies
+        """
+        positions = []
+        visibility_states = self.enemy_visibility_states
+        for i, addr in enumerate(ENEMY_Y_POS):
+            if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
+                positions.append(-1)
+            else:
+                positions.append(self._read_ram_safe(addr, default=0))
+        return positions
+
+    @property
+    def enemy_speeds(self) -> list[int]:
+        """Get horizontal speeds of enemies 1-5 (signed: positive=right, negative=left).
+
+        Returns:
+            List of 5 enemy speeds (index 0 = enemy 5, index 4 = enemy 1)
+            Returns -1 for invisible or dead enemies
+        """
+        speeds = []
+        visibility_states = self.enemy_visibility_states
+        for i, addr in enumerate(ENEMY_SPEED):
+            if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
+                speeds.append(-1)
+            else:
+                speed = self._read_ram_safe(addr, default=0)
+                signed_speed = speed if speed < 128 else speed - 256
+                speeds.append(signed_speed)
+        return speeds
+
+    @property
+    def enemy_x_pages(self) -> list[int]:
+        """Get X pages of enemies 1-5.
+
+        Returns:
+            List of 5 enemy X pages (index 0 = enemy 5, index 4 = enemy 1)
+            Returns -1 for invisible or dead enemies
+        """
+        pages = []
+        visibility_states = self.enemy_visibility_states
+        for i, addr in enumerate(ENEMY_X_PAGE):
+            if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
+                pages.append(-1)
+            else:
+                pages.append(self._read_ram_safe(addr, default=0))
+        return pages
+
+    @property
+    def enemy_y_pages(self) -> list[int]:
+        """Get Y pages of enemies 1-5.
+
+        Returns:
+            List of 5 enemy Y pages (index 0 = enemy 5, index 4 = enemy 1)
+            Returns -1 for invisible or dead enemies
+        """
+        pages = []
+        visibility_states = self.enemy_visibility_states
+        for i, addr in enumerate(ENEMY_Y_PAGE):
+            if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
+                pages.append(-1)
+            else:
+                pages.append(self._read_ram_safe(addr, default=0))
+        return pages
+
+    @property
+    def enemy_x_positions_global(self) -> list[int]:
+        """Get global X positions of enemies 1-5.
+
+        Returns:
+            List of 5 enemy global X positions (index 0 = enemy 5, index 4 = enemy 1)
+            Returns -1 for invisible or dead enemies
+        """
+        global_positions = []
+        visibility_states = self.enemy_visibility_states
+
+        for i, (x_pos_addr, x_page_addr) in enumerate(zip(ENEMY_X_POS, ENEMY_X_PAGE)):
+            if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
+                global_positions.append(-1)
+            else:
+                x_page = self._read_ram_safe(x_page_addr, default=0)
+                x_pos = self._read_ram_safe(x_pos_addr, default=0)
+                global_x = (x_page * PAGE_SIZE) + x_pos
+                global_positions.append(global_x)
+        return global_positions
+
+    @property
+    def enemy_y_positions_global(self) -> list[int]:
+        """Get global Y positions of enemies 1-5.
+
+        Returns:
+            List of 5 enemy global Y positions (index 0 = enemy 5, index 4 = enemy 1)
+            Returns -1 for invisible or dead enemies
+        """
+        global_positions = []
+        visibility_states = self.enemy_visibility_states
+
+        for i, (y_pos_addr, y_page_addr) in enumerate(zip(ENEMY_Y_POS, ENEMY_Y_PAGE)):
+            if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
+                global_positions.append(-1)
+            else:
+                y_page = self._read_ram_safe(y_page_addr, default=0)
+                y_pos = self._read_ram_safe(y_pos_addr, default=0)
+                global_y = (y_page * PAGE_SIZE) + y_pos
+                global_positions.append(global_y)
+        return global_positions
+
+    @property
+    def enemy_x_positions_relative(self) -> list[int]:
+        """Get X positions of enemies 1-5 relative to player using global coordinates.
+
+        Returns:
+            List of 5 enemy X positions relative to player (index 0 = enemy 5, index 4 = enemy 1)
+            Returns -1 for invisible or dead enemies
+        """
+        relative_positions = []
+        visibility_states = self.enemy_visibility_states
+        player_x_global = self.x_position_global
+        enemy_x_global = self.enemy_x_positions_global
+
+        for i in range(len(visibility_states)):
+            if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
+                relative_positions.append(-1)
+            else:
+                if enemy_x_global[i] != -1:
+                    relative_positions.append(player_x_global - enemy_x_global[i])
+                else:
+                    relative_positions.append(-1)
+        return relative_positions
+
+    @property
+    def enemy_y_positions_relative(self) -> list[int]:
+        """Get Y positions of enemies 1-5 relative to player using global coordinates.
+
+        Returns:
+            List of 5 enemy Y positions relative to player (index 0 = enemy 5, index 4 = enemy 1)
+            Positive values = enemy is below player, Negative values = enemy is above player
+            Returns -1 for invisible or dead enemies
+        """
+        relative_positions = []
+        visibility_states = self.enemy_visibility_states
+        player_y_global = self.y_position_global
+        enemy_y_global = self.enemy_y_positions_global
+
+        for i in range(len(visibility_states)):
+            if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
+                relative_positions.append(-1)
+            else:
+                if enemy_y_global[i] != -1:
+                    relative_positions.append(enemy_y_global[i] - player_y_global)
+                else:
+                    relative_positions.append(-1)
+        return relative_positions
 
     # ---- Validators ------------------------------------------------
 

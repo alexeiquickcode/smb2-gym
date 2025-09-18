@@ -103,6 +103,7 @@ VEGETABLES_PULLED = 0x062C
 STARMAN_TIMER = 0x04E0
 SUBSPACE_TIMER = 0x04B7
 STOPWATCH_TIMER = 0x04FF
+INVULNERABILITY_TIMER = 0x0085
 SUBSPACE_STATUS = 0x0628  # 00=no, 02=yes
 FLOAT_TIMER = 0x0553  # NOTE: Peach floating ability. Seems to be static?
 DOOR_TRANSITION_TIMER = 0x04BD  # Time counts up for how long the door takes to open
@@ -117,6 +118,9 @@ CONTINUES = 0x05C5  # Number of continues
 PLAYER_SPEED = 0x003C  # Horizontal speed
 ON_VINE = 0x0050  # 00=no, 01=on vine
 
+# Sprite speeds (left/right movement)
+ENEMY_SPEED = [0x003D, 0x003E, 0x003F, 0x0040, 0x0041]  # Enemy 5,4,3,2,1 speeds
+
 # Level completion tracking (per character)
 LEVELS_FINISHED_MARIO = 0x062D
 LEVELS_FINISHED_PEACH = 0x062E
@@ -126,9 +130,17 @@ LEVELS_FINISHED_LUIGI = 0x0630
 # Enemies (first 5 slots)
 ENEMY_X_POS = [0x0029, 0x002A, 0x002B, 0x002C, 0x002D]
 ENEMY_Y_POS = [0x0033, 0x0034, 0x0035, 0x0036, 0x0037]
+ENEMY_X_PAGE = [0x0015, 0x0016, 0x0017, 0x0018, 0x0019]  # Enemy 5,4,3,2,1 X page addresses
+ENEMY_Y_PAGE = [0x001F, 0x0020, 0x0021, 0x0022, 0x0023]  # Enemy 5,4,3,2,1 Y page addresses
 ENEMY_ID = [0x0090, 0x0091, 0x0092, 0x0093, 0x0094]
 ENEMY_HEALTH = [0x0465, 0x0466, 0x0467, 0x0468, 0x0469]
+ENEMY_VISIBILITY = [0x0051, 0x0052, 0x0053, 0x0054, 0x0055]  # Enemy 5,4,3,2,1 visibility states
 ENEMIES_DEFEATED = 0x04AD  # Count of enemies defeated (for heart spawning)
+
+# Enemy visibility states
+ENEMY_INVISIBLE = 0x00
+ENEMY_VISIBLE = 0x01
+ENEMY_DEAD = 0x02
 
 # Character names for display
 CHARACTER_NAMES = {0: "Mario", 1: "Peach", 2: "Toad", 3: "Luigi"}
