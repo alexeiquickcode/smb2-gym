@@ -22,14 +22,14 @@ class GlobalCoordinate(NamedTuple):
     - Sub-area: Subdivisions within an area (e.g., main level vs sub-world)
 
     World Position:
-    - Global X: Absolute horizontal position in the level 
-    - Global Y: Absolute vertical position in the level
+    - Global X: Absolute horizontal position in the level
+    - Global Y: Absolute vertical position in the level (y=0 at bottom, increasing upward)
 
     Args:
         area: Current area from memory address $04E7
-        sub_area: Current sub-area from memory address $04E8  
+        sub_area: Current sub-area from memory address $04E8
         global_x: Player's global X position (x_page * PAGE_SIZE + x_position)
-        global_y: Player's global Y position (y_page * PAGE_SIZE + y_position)
+        global_y: Player's global Y position (inverted: MAX_Y_GLOBAL - (y_page * PAGE_SIZE + y_position))
 
     Example:
         coord = GlobalCoordinate(area=1, sub_area=0, global_x=1024, global_y=192)
@@ -67,7 +67,6 @@ MAX_HEARTS = 4
 
 # Game mechanics
 PAGE_SIZE = 256  # Memory page size for position calculations
-Y_POSITION_WRAPAROUND_THRESHOLD = 10000  # Y positions above this are wraparound
 GAME_INIT_FRAMES = 300  # Frames to wait for game initialization
 
 # Save state slots
@@ -76,8 +75,8 @@ MAX_SAVE_SLOTS = 10  # 0-9
 # Player state
 PLAYER_X_PAGE = 0x0014  # Page of main character's X position
 PLAYER_X_POSITION = 0x0028  # Main character's X position on page
-PLAYER_Y_PAGE = 0x001E  # Page of main character's Y position
-PLAYER_Y_POSITION = 0x0032  # Y position on page
+PLAYER_Y_PAGE = 0x001E  # Page of main character's Y position (inverted in env: y=0 at bottom)
+PLAYER_Y_POSITION = 0x0032  # Y position on page (inverted in env: y=0 at bottom)
 PLAYER_STATE = 0x0050  # Player state/animation
 
 # Game state
@@ -131,7 +130,7 @@ LEVELS_FINISHED_LUIGI = 0x0630
 ENEMY_X_POS = [0x0029, 0x002A, 0x002B, 0x002C, 0x002D]
 ENEMY_Y_POS = [0x0033, 0x0034, 0x0035, 0x0036, 0x0037]
 ENEMY_X_PAGE = [0x0015, 0x0016, 0x0017, 0x0018, 0x0019]  # Enemy 5,4,3,2,1 X page addresses
-ENEMY_Y_PAGE = [0x001F, 0x0020, 0x0021, 0x0022, 0x0023]  # Enemy 5,4,3,2,1 Y page addresses
+ENEMY_Y_PAGE = [0x001F, 0x0020, 0x0021, 0x0022, 0x0023]
 ENEMY_ID = [0x0090, 0x0091, 0x0092, 0x0093, 0x0094]
 ENEMY_HEALTH = [0x0465, 0x0466, 0x0467, 0x0468, 0x0469]
 ENEMY_VISIBILITY = [0x0051, 0x0052, 0x0053, 0x0054, 0x0055]  # Enemy 5,4,3,2,1 visibility states

@@ -84,7 +84,6 @@ from .constants import (
     TOTAL_PAGES_IN_SUB_AREA,
     VEGETABLES_PULLED,
     WORLD_NUMBER,
-    Y_POSITION_WRAPAROUND_THRESHOLD,
     GlobalCoordinate,
 )
 
@@ -221,6 +220,7 @@ class SuperMarioBros2Env(gym.Env):
         if self._pygame_initialized or self.render_mode != 'human':
             return
 
+        # Lazy load this, we don't need for non rendered envs
         import pygame
         pygame.init()
 
@@ -396,6 +396,18 @@ class SuperMarioBros2Env(gym.Env):
             return obs
         return None
 
+    def _get_y_position(self, address: int) -> int:
+        """Safely read Y position from RAM and clamp to valid range.
+
+        Args:
+            address: RAM address to read Y position from
+
+        Returns:
+            Y position clamped to 0-239 range
+        """
+        y_pos = self._read_ram_safe(address, default=0)
+        return max(0, min(y_pos, SCREEN_HEIGHT - 1))
+
     def _read_ram_safe(self, address: int, default: int = 0) -> int:
         """Safely read from RAM with fallback.
 
@@ -525,31 +537,49 @@ class SuperMarioBros2Env(gym.Env):
         x_page = self._read_ram_safe(PLAYER_X_PAGE)
         return x_page
 
+    def _transform_y_coordinate(self, y_page: int, y_pos_raw: int) -> int:
+        """Transform raw Y coordinates to inverted system (y=0 at bottom, increasing upward).
+
+        Args:
+            y_page: Y page value from RAM
+            y_pos: Y position value from RAM
+
+        Returns:
+            Inverted Y coordinate
+        """
+        # Handle wraparound: when goes above top, y_page becomes 255
+        if y_page == 255:
+            y_page = 0
+
+        y_pos_global: int = y_page * SCREEN_HEIGHT + y_pos_raw
+
+        if self.is_vertical_area:
+            max_y_in_level = self.total_pages_in_sub_area * SCREEN_HEIGHT
+        else:
+            max_y_in_level = SCREEN_HEIGHT
+
+        return max_y_in_level - y_pos_global - 1
+
     @property
     def y_position_global(self) -> int:
-        """Get player global Y position."""
+        """Get player global Y position (with y=0 at bottom, increasing upward)."""
         y_page = self._read_ram_safe(PLAYER_Y_PAGE, default=0)
-        y_pos = self._read_ram_safe(PLAYER_Y_POSITION, default=0)
-        global_position = (y_page * PAGE_SIZE) + y_pos
-
-        # NOTE: Handle out-of-bounds positions (wraparound when Mario goes above
-        # screen). Valid Y positions in SMB2 are typically 0-1000, anything > 10000
-        # is wraparound
-        if global_position > Y_POSITION_WRAPAROUND_THRESHOLD:
-            return 0
-
-        return global_position
+        y_pos_raw = self._get_y_position(PLAYER_Y_POSITION)
+        return self._transform_y_coordinate(y_page, y_pos_raw)
 
     @property
     def y_position(self) -> int:
-        """Get player local Y position (on current page)."""
-        y_pos = self._read_ram_safe(PLAYER_Y_POSITION, default=0)
-        return y_pos
+        """Get player local Y position (with y=0 at bottom, increasing upward)."""
+        y_pos = self._get_y_position(PLAYER_Y_POSITION)
+        # Invert the y-coordinate within the screen space
+        return SCREEN_HEIGHT - 1 - y_pos
 
     @property
     def y_page(self) -> int:
         """Get the Y page of the player position."""
         y_page = self._read_ram_safe(PLAYER_Y_PAGE)
+        if y_page == 255:  # Screen wrap around
+            return 0
         return y_page
 
     @property
@@ -591,7 +621,7 @@ class SuperMarioBros2Env(gym.Env):
     def total_pages_in_sub_area(self) -> int:
         """Get total number of pages in the current sub-area."""
         total_pages = self._read_ram_safe(TOTAL_PAGES_IN_SUB_AREA, default=0)
-        return total_pages
+        return total_pages + 1  # zero indexed
 
     @property
     def is_vertical_area(self) -> bool:
@@ -652,7 +682,6 @@ class SuperMarioBros2Env(gym.Env):
     def cherries(self) -> int:
         """Get cherries collected."""
         cherries = self._read_ram_safe(CHERRIES, default=0)
-        # Cherries should be 0-19 (max per level)
         if 0 <= cherries <= MAX_CHERRIES:
             return cherries
         return 0
@@ -661,7 +690,6 @@ class SuperMarioBros2Env(gym.Env):
     def coins(self) -> int:
         """Get coins collected in Subspace."""
         coins = self._read_ram_safe(SUBSPACE_COINS, default=0)
-        # Coins should be reasonable
         if 0 <= coins <= MAX_COINS:
             return coins
         return 0
@@ -819,7 +847,7 @@ class SuperMarioBros2Env(gym.Env):
 
     @property
     def enemy_y_positions(self) -> list[int]:
-        """Get Y positions of enemies 1-5 on the current page.
+        """Get Y positions of enemies 1-5 on the current page (with y=0 at bottom).
 
         Returns:
             List of 5 enemy Y positions (index 0 = enemy 5, index 4 = enemy 1)
@@ -831,7 +859,9 @@ class SuperMarioBros2Env(gym.Env):
             if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
                 positions.append(-1)
             else:
-                positions.append(self._read_ram_safe(addr, default=0))
+                y_pos = self._get_y_position(addr)
+                # Invert the y-coordinate within the screen space
+                positions.append(SCREEN_HEIGHT - 1 - y_pos)
         return positions
 
     @property
@@ -910,7 +940,7 @@ class SuperMarioBros2Env(gym.Env):
 
     @property
     def enemy_y_positions_global(self) -> list[int]:
-        """Get global Y positions of enemies 1-5.
+        """Get global Y positions of enemies 1-5 (with y=0 at bottom, increasing upward).
 
         Returns:
             List of 5 enemy global Y positions (index 0 = enemy 5, index 4 = enemy 1)
@@ -924,9 +954,9 @@ class SuperMarioBros2Env(gym.Env):
                 global_positions.append(-1)
             else:
                 y_page = self._read_ram_safe(y_page_addr, default=0)
-                y_pos = self._read_ram_safe(y_pos_addr, default=0)
-                global_y = (y_page * PAGE_SIZE) + y_pos
-                global_positions.append(global_y)
+                y_pos_raw = self._get_y_position(y_pos_addr)
+                inverted_y = self._transform_y_coordinate(y_page, y_pos_raw)
+                global_positions.append(inverted_y)
         return global_positions
 
     @property
@@ -956,9 +986,12 @@ class SuperMarioBros2Env(gym.Env):
     def enemy_y_positions_relative(self) -> list[int]:
         """Get Y positions of enemies 1-5 relative to player using global coordinates.
 
+        With inverted Y coordinates (y=0 at bottom, increasing upward):
+        - Positive values = enemy is above player (enemy has higher Y)
+        - Negative values = enemy is below player (enemy has lower Y)
+
         Returns:
             List of 5 enemy Y positions relative to player (index 0 = enemy 5, index 4 = enemy 1)
-            Positive values = enemy is below player, Negative values = enemy is above player
             Returns -1 for invisible or dead enemies
         """
         relative_positions = []
@@ -971,7 +1004,7 @@ class SuperMarioBros2Env(gym.Env):
                 relative_positions.append(-1)
             else:
                 if enemy_y_global[i] != -1:
-                    relative_positions.append(enemy_y_global[i] - player_y_global)
+                    relative_positions.append(player_y_global - enemy_y_global[i])
                 else:
                     relative_positions.append(-1)
         return relative_positions
