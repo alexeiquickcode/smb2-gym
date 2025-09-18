@@ -61,7 +61,7 @@ def play_human(
     print(config.describe())
 
     # Create env
-    env = SuperMarioBros2Env(init_config=config, frame_method="grayscale")
+    env = SuperMarioBros2Env(init_config=config)
 
     # Setup pygame
     width, height = SCREEN_WIDTH * scale, SCREEN_HEIGHT * scale

@@ -8,12 +8,12 @@ A Gymnasium environment for Super Mario Bros 2 (Europe/Doki Doki Panic version) 
 
 **Features:**
 - Curated action sets for faster training (`simple`, `complex`)
-- Comprehensive game state via info dict (30+ properties)
+- Comprehensive game state via info dict (35+ properties)
 - Multiple initialization modes (character/level, custom ROMs, save states)
 - Human-playable interface with keyboard controls
-- Up to XXX and XXX FPS rendered and non-rendered respectively
+- Up to 350+ and 750+ FPS rendered and non-rendered respectively
 
-A full list of the available RAM map properties is available at [Data Crystal](https://datacrystal.tcrf.net/wiki/Super_Mario_Bros._2_(NES)/RAM_map).
+A somewhat comprehensive list of the available RAM map properties is available at [Data Crystal](https://datacrystal.tcrf.net/wiki/Super_Mario_Bros._2_(NES)/RAM_map), but this library includes many extras that are not documented anywhere.
 
 ## Installation
 
@@ -144,7 +144,7 @@ smb2-play --custom-rom /path/to/smb2.nes --no-save-state
 - Enter: Start
 - Right Shift: Select
 - P: Pause
-- R: Reset  
+- R: Reset
 - ESC: Quit
 
 **Alternative Controls:**

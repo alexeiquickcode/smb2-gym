@@ -83,6 +83,12 @@ def draw_info(
         f"  Starman Active: {'YES' if info['starman_timer'] > 0 else 'No'}",
         f"  Stopwatch Active: {'YES' if info['stopwatch_timer'] > 0 else 'No'}",
         f"  Can Float: {'YES' if info['float_timer'] > 0 and info['character'] == 1 else 'No'}",
+        "",
+        f"Levels Completed:",
+        f"  Mario: {info['levels_finished']['mario']}",
+        f"  Luigi: {info['levels_finished']['luigi']}",
+        f"  Peach: {info['levels_finished']['peach']}",
+        f"  Toad: {info['levels_finished']['toad']}",
     ]
 
     # Helper function to draw column

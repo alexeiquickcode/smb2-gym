@@ -294,8 +294,9 @@ class SuperMarioBros2Env(gym.Env):
 
         info = self.info
 
-        # Initialize life tracking for detecting life loss
+        # Initialize tracking for detecting life loss and level completion
         self._previous_lives = self.lives
+        self._previous_levels_finished = self.levels_finished.copy()
         if self.render_mode == 'human':
             self.render(obs)
 
@@ -333,11 +334,13 @@ class SuperMarioBros2Env(gym.Env):
         if life_lost:
             info['life_lost'] = True
 
-        # Update life tracking for next step
+        # Update tracking for next step
+        level_completed = self.level_completed
         self._previous_lives = self.lives
+        self._previous_levels_finished = self.levels_finished.copy()
 
         # 4. Check termination
-        terminated = self.is_game_over or life_lost
+        terminated = self.is_game_over or life_lost or level_completed
         truncated = (
             self.max_episode_steps is not None and self._episode_steps >= self.max_episode_steps
         )
@@ -442,6 +445,7 @@ class SuperMarioBros2Env(gym.Env):
             'vegetables_pulled': self.vegetables_pulled,
             'subspace_status': self.subspace_status,
             'level_transition': self.level_transition,
+            'level_completed': self.level_completed,
             'door_transition_timer': self.door_transition_timer,
             'enemies_defeated': self.enemies_defeated,
         }
@@ -726,22 +730,40 @@ class SuperMarioBros2Env(gym.Env):
         """Get level transition state.
 
         NOTE: This value at 0x04EC appears to change for less than a frame.
-        The game sets it to non-zero and immediately clears it back to 0 
-        within the same frame's CPU execution (as seen in disassembly at 
+        The game sets it to non-zero and immediately clears it back to 0
+        within the same frame's CPU execution (as seen in disassembly at
         $E66D: STA $04EC). Therefore, we cannot reliably detect transitions
         by polling this value once per frame.
-        For reliable level completion detection, use the increase in 
+        For reliable level completion detection, use the increase in
         'levels_finished' counter instead.
 
         Values (theoretical):
         0 - normal gameplay
-        1 - restart same level  
+        1 - restart same level
         2 - game over
         3 - end level, go to bonus game (level completed)
         4 - warp
         """
         # This will almost always return 0 due to sub-frame clearing
         return self._read_ram_safe(LEVEL_TRANSITION, default=0)
+
+    @property
+    def level_completed(self) -> bool:
+        """Detect if a level was just completed.
+
+        Returns True if any character's levels_finished counter has increased
+        since the last step.
+        """
+        if not hasattr(self, '_previous_levels_finished'):
+            return False
+
+        current_levels_finished = self.levels_finished
+        for char_name in ['mario', 'peach', 'toad', 'luigi']:
+            if current_levels_finished[char_name] > self._previous_levels_finished.get(
+                char_name, 0
+            ):
+                return True
+        return False
 
     # ---- Validators ------------------------------------------------
 
