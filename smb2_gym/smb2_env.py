@@ -36,6 +36,7 @@ from .constants import (
     ENEMY_HEALTH,
     ENEMY_ID,
     ENEMY_INVISIBLE,
+    ENEMY_NOT_PRESENT,
     ENEMY_SPEED,
     ENEMY_VISIBILITY,
     ENEMY_VISIBLE,
@@ -479,6 +480,7 @@ class SuperMarioBros2Env(gym.Env):
             'enemy_y_pages': self.enemy_y_pages,
             'enemy_x_positions_relative': self.enemy_x_positions_relative,
             'enemy_y_positions_relative': self.enemy_y_positions_relative,
+            'enemy_hp': self.enemy_hp,
         }
 
     @property
@@ -834,13 +836,13 @@ class SuperMarioBros2Env(gym.Env):
 
         Returns:
             List of 5 enemy X positions (index 0 = enemy 5, index 4 = enemy 1)
-            Returns -1 for invisible or dead enemies
+            Returns ENEMY_NOT_PRESENT for invisible or dead enemies
         """
         positions = []
         visibility_states = self.enemy_visibility_states
         for i, addr in enumerate(ENEMY_X_POS):
             if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
-                positions.append(-1)
+                positions.append(ENEMY_NOT_PRESENT)
             else:
                 positions.append(self._read_ram_safe(addr, default=0))
         return positions
@@ -851,13 +853,13 @@ class SuperMarioBros2Env(gym.Env):
 
         Returns:
             List of 5 enemy Y positions (index 0 = enemy 5, index 4 = enemy 1)
-            Returns -1 for invisible or dead enemies
+            Returns ENEMY_NOT_PRESENT for invisible or dead enemies
         """
         positions = []
         visibility_states = self.enemy_visibility_states
         for i, addr in enumerate(ENEMY_Y_POS):
             if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
-                positions.append(-1)
+                positions.append(ENEMY_NOT_PRESENT)
             else:
                 y_pos = self._get_y_position(addr)
                 # Invert the y-coordinate within the screen space
@@ -870,13 +872,13 @@ class SuperMarioBros2Env(gym.Env):
 
         Returns:
             List of 5 enemy speeds (index 0 = enemy 5, index 4 = enemy 1)
-            Returns -1 for invisible or dead enemies
+            Returns ENEMY_NOT_PRESENT for invisible or dead enemies
         """
         speeds = []
         visibility_states = self.enemy_visibility_states
         for i, addr in enumerate(ENEMY_SPEED):
             if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
-                speeds.append(-1)
+                speeds.append(ENEMY_NOT_PRESENT)
             else:
                 speed = self._read_ram_safe(addr, default=0)
                 signed_speed = speed if speed < 128 else speed - 256
@@ -889,13 +891,13 @@ class SuperMarioBros2Env(gym.Env):
 
         Returns:
             List of 5 enemy X pages (index 0 = enemy 5, index 4 = enemy 1)
-            Returns -1 for invisible or dead enemies
+            Returns ENEMY_NOT_PRESENT for invisible or dead enemies
         """
         pages = []
         visibility_states = self.enemy_visibility_states
         for i, addr in enumerate(ENEMY_X_PAGE):
             if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
-                pages.append(-1)
+                pages.append(ENEMY_NOT_PRESENT)
             else:
                 pages.append(self._read_ram_safe(addr, default=0))
         return pages
@@ -906,13 +908,13 @@ class SuperMarioBros2Env(gym.Env):
 
         Returns:
             List of 5 enemy Y pages (index 0 = enemy 5, index 4 = enemy 1)
-            Returns -1 for invisible or dead enemies
+            Returns ENEMY_NOT_PRESENT for invisible or dead enemies
         """
         pages = []
         visibility_states = self.enemy_visibility_states
         for i, addr in enumerate(ENEMY_Y_PAGE):
             if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
-                pages.append(-1)
+                pages.append(ENEMY_NOT_PRESENT)
             else:
                 pages.append(self._read_ram_safe(addr, default=0))
         return pages
@@ -923,14 +925,14 @@ class SuperMarioBros2Env(gym.Env):
 
         Returns:
             List of 5 enemy global X positions (index 0 = enemy 5, index 4 = enemy 1)
-            Returns -1 for invisible or dead enemies
+            Returns ENEMY_NOT_PRESENT for invisible or dead enemies
         """
         global_positions = []
         visibility_states = self.enemy_visibility_states
 
         for i, (x_pos_addr, x_page_addr) in enumerate(zip(ENEMY_X_POS, ENEMY_X_PAGE)):
             if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
-                global_positions.append(-1)
+                global_positions.append(ENEMY_NOT_PRESENT)
             else:
                 x_page = self._read_ram_safe(x_page_addr, default=0)
                 x_pos = self._read_ram_safe(x_pos_addr, default=0)
@@ -944,14 +946,14 @@ class SuperMarioBros2Env(gym.Env):
 
         Returns:
             List of 5 enemy global Y positions (index 0 = enemy 5, index 4 = enemy 1)
-            Returns -1 for invisible or dead enemies
+            Returns ENEMY_NOT_PRESENT for invisible or dead enemies
         """
         global_positions = []
         visibility_states = self.enemy_visibility_states
 
         for i, (y_pos_addr, y_page_addr) in enumerate(zip(ENEMY_Y_POS, ENEMY_Y_PAGE)):
             if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
-                global_positions.append(-1)
+                global_positions.append(ENEMY_NOT_PRESENT)
             else:
                 y_page = self._read_ram_safe(y_page_addr, default=0)
                 y_pos_raw = self._get_y_position(y_pos_addr)
@@ -965,7 +967,7 @@ class SuperMarioBros2Env(gym.Env):
 
         Returns:
             List of 5 enemy X positions relative to player (index 0 = enemy 5, index 4 = enemy 1)
-            Returns -1 for invisible or dead enemies
+            Returns ENEMY_NOT_PRESENT for invisible or dead enemies
         """
         relative_positions = []
         visibility_states = self.enemy_visibility_states
@@ -974,12 +976,12 @@ class SuperMarioBros2Env(gym.Env):
 
         for i in range(len(visibility_states)):
             if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
-                relative_positions.append(-1)
+                relative_positions.append(ENEMY_NOT_PRESENT)
             else:
-                if enemy_x_global[i] != -1:
+                if enemy_x_global[i] != ENEMY_NOT_PRESENT:
                     relative_positions.append(player_x_global - enemy_x_global[i])
                 else:
-                    relative_positions.append(-1)
+                    relative_positions.append(ENEMY_NOT_PRESENT)
         return relative_positions
 
     @property
@@ -992,7 +994,7 @@ class SuperMarioBros2Env(gym.Env):
 
         Returns:
             List of 5 enemy Y positions relative to player (index 0 = enemy 5, index 4 = enemy 1)
-            Returns -1 for invisible or dead enemies
+            Returns ENEMY_NOT_PRESENT for invisible or dead enemies
         """
         relative_positions = []
         visibility_states = self.enemy_visibility_states
@@ -1001,13 +1003,30 @@ class SuperMarioBros2Env(gym.Env):
 
         for i in range(len(visibility_states)):
             if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
-                relative_positions.append(-1)
+                relative_positions.append(ENEMY_NOT_PRESENT)
             else:
-                if enemy_y_global[i] != -1:
+                if enemy_y_global[i] != ENEMY_NOT_PRESENT:
                     relative_positions.append(player_y_global - enemy_y_global[i])
                 else:
-                    relative_positions.append(-1)
+                    relative_positions.append(ENEMY_NOT_PRESENT)
         return relative_positions
+
+    @property
+    def enemy_hp(self) -> list[int]:
+        """Get HP values of enemies 1-5.
+
+        Returns:
+            List of 5 enemy HP values (index 0 = enemy 5, index 4 = enemy 1)
+            Returns ENEMY_NOT_PRESENT for invisible or dead enemies
+        """
+        hp_values = []
+        visibility_states = self.enemy_visibility_states
+        for i, addr in enumerate(ENEMY_HEALTH):
+            if visibility_states[i] in [ENEMY_INVISIBLE, ENEMY_DEAD]:
+                hp_values.append(ENEMY_NOT_PRESENT)
+            else:
+                hp_values.append(self._read_ram_safe(addr, default=0))
+        return hp_values
 
     # ---- Validators ------------------------------------------------
 

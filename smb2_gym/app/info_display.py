@@ -103,26 +103,26 @@ def create_info_panel(
             str(info['levels_finished']['toad'])
         ),
 
-        # Enemy positions (relative to player)
+        # Enemy positions (relative to player) and HP
         (
             "Enemy 1 Rel X/Y", f"{info['enemy_x_positions_relative'][4]}/{info['enemy_y_positions_relative'][4]}",
-            "Enemy 1 Speed", str(info['enemy_speeds'][4])
+            "Enemy 1 HP", str(info['enemy_hp'][4])
         ),
         (
             "Enemy 2 Rel X/Y", f"{info['enemy_x_positions_relative'][3]}/{info['enemy_y_positions_relative'][3]}",
-            "Enemy 2 Speed", str(info['enemy_speeds'][3])
+            "Enemy 2 HP", str(info['enemy_hp'][3])
         ),
         (
             "Enemy 3 Rel X/Y", f"{info['enemy_x_positions_relative'][2]}/{info['enemy_y_positions_relative'][2]}",
-            "Enemy 3 Speed", str(info['enemy_speeds'][2])
+            "Enemy 3 HP", str(info['enemy_hp'][2])
         ),
         (
             "Enemy 4 Rel X/Y", f"{info['enemy_x_positions_relative'][1]}/{info['enemy_y_positions_relative'][1]}",
-            "Enemy 4 Speed", str(info['enemy_speeds'][1])
+            "Enemy 4 HP", str(info['enemy_hp'][1])
         ),
         (
             "Enemy 5 Rel X/Y", f"{info['enemy_x_positions_relative'][0]}/{info['enemy_y_positions_relative'][0]}",
-            "Enemy 5 Speed", str(info['enemy_speeds'][0])
+            "Enemy 5 HP", str(info['enemy_hp'][0])
         ),
     ]
 

@@ -141,6 +141,9 @@ ENEMY_INVISIBLE = 0x00
 ENEMY_VISIBLE = 0x01
 ENEMY_DEAD = 0x02
 
+# Enemy position sentinel value for RL (when enemy not present)
+ENEMY_NOT_PRESENT = -9999
+
 # Character names for display
 CHARACTER_NAMES = {0: "Mario", 1: "Peach", 2: "Toad", 3: "Luigi"}
 
