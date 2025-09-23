@@ -110,6 +110,7 @@ class SuperMarioBros2Env(gym.Env):
         reset_on_life_loss: bool = False,
         render_fps: Optional[int] = None,
         frame_method: str = "rgb",
+        env_name: Optional[str] = None,
     ):
         """Initialize the SMB2 environment.
 
@@ -131,6 +132,9 @@ class SuperMarioBros2Env(gym.Env):
         self.reset_on_life_loss = reset_on_life_loss
         self.init_config = init_config
         self.render_fps = render_fps
+        self.env_name = env_name
+        if self.env_name:
+            print(f'Creating {self.env_name} environment...')
 
         # Validate and store frame method
         valid_frame_methods = ["rgb", "grayscale"]

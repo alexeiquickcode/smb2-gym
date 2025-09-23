@@ -41,7 +41,6 @@ class InitConfig:
         character: Optional[Union[str, int]] = None,
         rom_path: Optional[str] = None,
         save_state_path: Optional[str] = None,
-        env_name: Optional[str] = None,
     ):
         """Initialize configuration.
 
@@ -55,10 +54,6 @@ class InitConfig:
         self.character = character or "luigi"
         self.rom_path = rom_path
         self.save_state_path = save_state_path
-        self.env_name = env_name
-
-        if self.env_name:
-            print(f'Creating environment {self.env_name}...')
 
         # Convert character name to ID if needed
         if isinstance(self.character, str):

@@ -25,7 +25,8 @@ def test_frame_methods_fps_comparison(basic_env_config, caplog):
                 init_config=basic_env_config,
                 render_mode=render_mode,
                 action_type="simple",
-                frame_method=method
+                frame_method=method,
+                env_name="test",
             )
 
             try:
@@ -58,7 +59,9 @@ def test_frame_methods_fps_comparison(basic_env_config, caplog):
     with caplog.at_level(logging.INFO):
         logger.info("Frame Methods FPS Comparison - Complete Results:")
         logger.info("=" * 80)
-        logger.info(f"{'Method':<12} {'Mode':<12} {'FPS':<8} {'Time(s)':<8} {'Memory(KB)':<12} {'Shape'}")
+        logger.info(
+            f"{'Method':<12} {'Mode':<12} {'FPS':<8} {'Time(s)':<8} {'Memory(KB)':<12} {'Shape'}"
+        )
         logger.info("-" * 80)
 
         for render_label in ["Human Render", "No Render"]:
@@ -91,11 +94,14 @@ def test_frame_methods_fps_comparison(basic_env_config, caplog):
             if method == "grayscale":
                 assert data['obs_shape'] == (240, 256), f"Grayscale should be 2D for {render_label}"
             else:
-                assert data['obs_shape'] == (240, 256, 3), f"RGB methods should be 3D for {render_label}"
+                assert data['obs_shape'] == (
+                    240, 256, 3
+                ), f"RGB methods should be 3D for {render_label}"
 
         # Performance assertions within each render mode
         # Grayscale should be faster due to smaller memory footprint (60KB vs 180KB)
-        assert results['grayscale']['fps'] > results['rgb']['fps'], f"Grayscale should be faster than RGB for {render_label}"
+        assert results['grayscale']['fps'] > results['rgb'][
+            'fps'], f"Grayscale should be faster than RGB for {render_label}"
 
         # RGB performance should be reasonable
         assert results['rgb']['fps'] > 50, f"RGB FPS should be reasonable for {render_label}"
@@ -113,4 +119,5 @@ def test_frame_methods_fps_comparison(basic_env_config, caplog):
 
     # Memory usage assertions
     for render_label, results in all_results.items():
-        assert results['grayscale']['memory_kb'] < results['rgb']['memory_kb'], f"Grayscale should use less memory than RGB for {render_label}"
+        assert results['grayscale']['memory_kb'] < results['rgb'][
+            'memory_kb'], f"Grayscale should use less memory than RGB for {render_label}"
