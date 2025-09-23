@@ -13,7 +13,7 @@ smb2_gym = ["_nes/**/*"]
 
 [project]
 name = "smb2-gym"
-version = "0.2.9"
+version = "0.2.10"
 authors = [{ name = "Alexei Quick" }]
 description = "Super Mario Bros 2 (Europe) Gymnasium Environment"
 readme = "README.md"
@@ -33,6 +33,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
+    "setuptools<67.3.0",
     "gymnasium>=0.29.0",
     "numpy>=1.21.0",
     "pygame>=2.1.0",
