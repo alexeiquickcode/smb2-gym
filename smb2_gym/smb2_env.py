@@ -219,6 +219,9 @@ class SuperMarioBros2Env(gym.Env):
         self._done = False
         self._episode_steps = 0
         self._previous_lives = None  # Track lives to detect life loss
+        self._previous_sub_area = None  # Track sub-area for transition detection
+        self._previous_x_global = None  # Track x position for transition detection
+        self._previous_y_global = None  # Track y position for transition detection
 
     def _init_rendering(self) -> None:
         """Initialize pygame rendering when first needed."""
@@ -310,6 +313,9 @@ class SuperMarioBros2Env(gym.Env):
         # Initialize tracking for detecting life loss and level completion
         self._previous_lives = self.lives
         self._previous_levels_finished = self.levels_finished.copy()
+        self._previous_sub_area = self.sub_area
+        self._previous_x_global = self.x_position_global
+        self._previous_y_global = self.y_position_global
         if self.render_mode == 'human':
             self.render(obs)
 
@@ -351,6 +357,9 @@ class SuperMarioBros2Env(gym.Env):
         level_completed = self.level_completed
         self._previous_lives = self.lives
         self._previous_levels_finished = self.levels_finished.copy()
+        self._previous_sub_area = self.sub_area
+        self._previous_x_global = self.x_position_global
+        self._previous_y_global = self.y_position_global
 
         # 4. Check termination
         terminated = self.is_game_over or life_lost or level_completed
@@ -637,7 +646,9 @@ class SuperMarioBros2Env(gym.Env):
 
     @property
     def global_coordinate_system(self) -> GlobalCoordinate:
-        """Get global coordinate system combining level structure with player position.
+        """
+        Get global coordinate system combining level structure with player 
+        position.
 
         Returns a 4-tuple coordinate system: (Area, Sub-area, Global_X, Global_Y)
 
@@ -645,14 +656,35 @@ class SuperMarioBros2Env(gym.Env):
         - Level structure: Area, Sub-area (from memory addresses $04E7-$04E8)
         - Player position: Global X and Y coordinates in the game world
 
+        Note: During door transitions, SMB2 updates sub_area before updating 
+        player coordinates. This method ensures consistency by only updating 
+        sub_area when coordinates also change, preventing mismatched data during 
+        transitions.
+
         Returns:
             GlobalCoordinate: NamedTuple with area, sub_area, global_x, global_y
         """
+        current_sub_area = self.sub_area
+        current_x = self.x_position_global
+        current_y = self.y_position_global
+
+        # Check if we're in a transition state where sub_area changed but coordinates haven't
+        if (self._previous_sub_area is not None and \
+            self._previous_x_global is not None and
+            self._previous_y_global is not None):
+
+            # If sub_area changed but coordinates are the same, use previous sub_area
+            # This indicates we're mid-transition. This occurs for only a frame.
+            if (current_sub_area != self._previous_sub_area and \
+                current_x == self._previous_x_global and
+                current_y == self._previous_y_global):
+                current_sub_area = self._previous_sub_area
+
         return GlobalCoordinate(
             area=self.area,
-            sub_area=self.sub_area,
-            global_x=self.x_position_global,
-            global_y=self.y_position_global
+            sub_area=current_sub_area,
+            global_x=current_x,
+            global_y=current_y,
         )
 
     @property
