@@ -94,12 +94,15 @@ class SuperMarioBros2Env(gym.Env):
     Gymnasium environment for Super Mario Bros 2 (Europe).
 
     This environment provides a minimal interface to the NES emulator,
-    returning pixel observations and allowing all 256 button combinations as 
-    actions. 
+    returning pixel observations and allowing all 256 button combinations as
+    actions.
 
-    Rewards are always 0 - users should implement their own reward functions 
+    Rewards are always 0 - users should implement their own reward functions
     based on the RAM values available in the info dict.
     """
+
+    # Number of frames to wait during area transitions before accepting new coordinates
+    AREA_TRANSITION_FRAMES = 98
 
     def __init__(
         self,
@@ -222,6 +225,7 @@ class SuperMarioBros2Env(gym.Env):
         self._previous_sub_area = None  # Track sub-area for transition detection
         self._previous_x_global = None  # Track x position for transition detection
         self._previous_y_global = None  # Track y position for transition detection
+        self._transition_frame_count = 0  # Count frames since transition detected
 
     def _init_rendering(self) -> None:
         """Initialize pygame rendering when first needed."""
@@ -278,6 +282,7 @@ class SuperMarioBros2Env(gym.Env):
         self._nes.reset()
         self._done = False
         self._episode_steps = 0
+        self._transition_frame_count = 0
 
         save_path = self.init_config.get_save_state_path()
 
@@ -313,9 +318,12 @@ class SuperMarioBros2Env(gym.Env):
         # Initialize tracking for detecting life loss and level completion
         self._previous_lives = self.lives
         self._previous_levels_finished = self.levels_finished.copy()
-        self._previous_sub_area = self.sub_area
-        self._previous_x_global = self.x_position_global
-        self._previous_y_global = self.y_position_global
+
+        # Initialize tracking with consistent global coordinates
+        global_coords = self.global_coordinate_system
+        self._previous_sub_area = global_coords.sub_area
+        self._previous_x_global = global_coords.global_x
+        self._previous_y_global = global_coords.global_y
         if self.render_mode == 'human':
             self.render(obs)
 
@@ -357,9 +365,12 @@ class SuperMarioBros2Env(gym.Env):
         level_completed = self.level_completed
         self._previous_lives = self.lives
         self._previous_levels_finished = self.levels_finished.copy()
-        self._previous_sub_area = self.sub_area
-        self._previous_x_global = self.x_position_global
-        self._previous_y_global = self.y_position_global
+
+        # Track global coords
+        global_coords = self.global_coordinate_system
+        self._previous_sub_area = global_coords.sub_area
+        self._previous_x_global = global_coords.global_x
+        self._previous_y_global = global_coords.global_y
 
         # 4. Check termination
         terminated = self.is_game_over or life_lost or level_completed
@@ -647,7 +658,7 @@ class SuperMarioBros2Env(gym.Env):
     @property
     def global_coordinate_system(self) -> GlobalCoordinate:
         """
-        Get global coordinate system combining level structure with player 
+        Get global coordinate system combining level structure with player
         position.
 
         Returns a 4-tuple coordinate system: (Area, Sub-area, Global_X, Global_Y)
@@ -656,10 +667,9 @@ class SuperMarioBros2Env(gym.Env):
         - Level structure: Area, Sub-area (from memory addresses $04E7-$04E8)
         - Player position: Global X and Y coordinates in the game world
 
-        Note: During door transitions, SMB2 updates sub_area before updating 
-        player coordinates. This method ensures consistency by only updating 
-        sub_area when coordinates also change, preventing mismatched data during 
-        transitions.
+        Note: During door transitions, SMB2 updates sub_area before updating
+        player coordinates. This method waits AREA_TRANSITION_FRAMES after detectin25
+        transition before accepting new coordinates to ensure they've fully updated.
 
         Returns:
             GlobalCoordinate: NamedTuple with area, sub_area, global_x, global_y
@@ -673,12 +683,23 @@ class SuperMarioBros2Env(gym.Env):
             self._previous_x_global is not None and
             self._previous_y_global is not None):
 
-            # If sub_area changed but coordinates are the same, use previous sub_area
-            # This indicates we're mid-transition. This occurs for only a frame.
-            if (current_sub_area != self._previous_sub_area and \
+            # Detect new transition
+            if (self._transition_frame_count == 0 and \
+                current_sub_area != self._previous_sub_area and \
                 current_x == self._previous_x_global and
                 current_y == self._previous_y_global):
+                self._transition_frame_count = 1
                 current_sub_area = self._previous_sub_area
+
+            # Detect transition period
+            elif self._transition_frame_count > 0:
+                self._transition_frame_count += 1
+                if self._transition_frame_count <= self.AREA_TRANSITION_FRAMES:
+                    current_sub_area = self._previous_sub_area
+                    current_x = self._previous_x_global
+                    current_y = self._previous_y_global
+                elif self._transition_frame_count == self.AREA_TRANSITION_FRAMES + 1:
+                    self._transition_frame_count = 0  # Reset counter
 
         return GlobalCoordinate(
             area=self.area,
