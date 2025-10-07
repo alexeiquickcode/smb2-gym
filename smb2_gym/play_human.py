@@ -167,13 +167,12 @@ def play_human(
             # Step environment
             obs, reward, terminated, truncated, info = env.step(action)
 
-            if terminated or truncated:
-                if info.get('level_completed'):
-                    print("Level Completed! Press R (in game window) to reset or ESC to quit.")
-                else:
-                    print("Game Over! Press R (in game window) to reset or ESC to quit.")
-                game_over = True
-                # Don't auto-reset, wait for user/player input
+            # if terminated or truncated:
+            #     if info.get('level_completed'):
+            #         print("Level Completed! Continuing to next area...")
+            #     else:
+            #         print("Game Over! Press R (in game window) to reset or ESC to quit.")
+            #         game_over = True
 
         render_frame(screen, obs, width, height)
         create_info_panel(screen, info, font, height, width)

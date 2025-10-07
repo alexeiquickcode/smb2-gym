@@ -177,3 +177,7 @@ smb2-play --custom-rom /path/to/smb2.nes --no-save-state
 ## Disclaimer
 
 This project is for educational and research purposes only. Users must provide their own legally obtained ROM files.
+
+### Debugging
+
+

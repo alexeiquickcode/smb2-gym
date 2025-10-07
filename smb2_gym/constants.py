@@ -108,6 +108,18 @@ FLOAT_TIMER = 0x0553  # NOTE: Peach floating ability. Seems to be static?
 DOOR_TRANSITION_TIMER = 0x04BD  # Time counts up for how long the door takes to open
 LEVEL_TRANSITION = 0x04EC  # Level transition state
 
+# Additional timer addresses
+FRAMERULE_TIMER = 0x0010  # General 256 frames framerule counter
+UNKNOWN_TIMER = 0x0086  # Amount of time left for unknown
+BOB_OMB_5_TIMER = 0x0087  # Amount of time left before Bob Omb 5 explodes
+BOB_OMB_4_TIMER = 0x0088  # Amount of time left before Bob Omb 4 explodes
+BOB_OMB_3_TIMER = 0x0089  # Amount of time left before Bob Omb 3 explodes
+BOB_OMB_2_TIMER = 0x008A  # Amount of time left before Bob Omb 2 explodes
+BOB_OMB_1_TIMER = 0x008B  # Amount of time left before Bob Omb 1 explodes
+BOMB_1_TIMER = 0x008C  # Amount of time left before Bomb 1 explodes
+BOMB_2_TIMER = 0x008D  # Amount of time left before Bomb 2 explodes
+PIDGET_CARPET_TIMER = 0x008E  # Time left to use Pidget's carpet
+
 # Items and inventory
 ITEM_HOLDING = 0x009C  # 00=no item, 01=holding item
 ITEM_PULLED = 0x0096  # Item pulled from ground
@@ -143,6 +155,47 @@ ENEMY_DEAD = 0x02
 
 # Enemy position sentinel value for RL (when enemy not present)
 ENEMY_NOT_PRESENT = -9999
+
+# Collision and Level Data
+DECODED_LEVEL_DATA = 0x6000  # Decoded level data (tile grid used by CPU)
+RAW_LEVEL_DATA = 0x7800  # Raw/compressed level data
+RAW_JAR_DATA = 0x7A00  # Raw jar/pipe data
+RAW_ENEMY_DATA = 0x7B00  # Raw enemy data
+
+# PPU Nametable addresses (for display, not collision)
+PPU_NAMETABLE_0 = 0x2000  # Top-left nametable
+PPU_NAMETABLE_1 = 0x2400  # Top-right nametable
+PPU_NAMETABLE_2 = 0x2800  # Bottom-left nametable
+PPU_NAMETABLE_3 = 0x2C00  # Bottom-right nametable
+
+# Collision flags (from SMB2 disassembly)
+PLAYER_COLLISION = 0x005A  # Player collision flags
+ENEMY_COLLISION = 0x005B  # Enemy collision flags
+
+# Collision flag bits
+COLLISION_RIGHT = 0x01
+COLLISION_LEFT = 0x02
+COLLISION_DOWN = 0x04
+COLLISION_UP = 0x08
+COLLISION_DAMAGE = 0x10
+COLLISION_PLAYER_ON_TOP = 0x20
+COLLISION_PLAYER_INSIDE = 0x40
+COLLISION_FLAG_80 = 0x80
+
+# Level dimensions
+LEVEL_PAGE_WIDTH = 16  # Tiles per page horizontally
+LEVEL_PAGE_HEIGHT = 15  # Tiles per page vertically
+SCREEN_TILES_WIDTH = 16  # Visible tiles horizontally
+SCREEN_TILES_HEIGHT = 15  # Visible tiles vertically (status bar excluded)
+
+# Special tile IDs from SMB2 (from defs.asm)
+TILE_SKY = 0x00  # Empty/air
+TILE_JUMP_THROUGH_BLOCK = 0x12  # Semi-solid platform
+TILE_CHAIN_STANDABLE = 0x17  # Chain that can be stood on
+TILE_LADDER = 0x80  # Climbable ladder
+TILE_LADDER_STANDABLE = 0x94  # Ladder with platform
+TILE_VINE = 0xD4  # Climbable vine
+TILE_VINE_STANDABLE = 0xD4  # Vine with platform
 
 # Character names for display
 CHARACTER_NAMES = {0: "Mario", 1: "Peach", 2: "Toad", 3: "Luigi"}
