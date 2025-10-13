@@ -1,52 +1,57 @@
-"""Position and coordinate system properties for SMB2 environment."""
+"""Position, world, and coordinate system properties for SMB2 environment."""
 
-from .base import GameStateMixin
+from ._base import GameStateMixin
 from ..constants import (
-    AREA,
-    CURRENT_PAGE_POSITION,
-    PAGE,
-    PAGE_SIZE,
-    PLAYER_X_PAGE,
-    PLAYER_X_POSITION,
-    PLAYER_Y_PAGE,
-    PLAYER_Y_POSITION,
-    SCREEN_HEIGHT,
-    SCROLL_DIRECTION,
-    SUB_AREA,
-    TOTAL_PAGES_IN_SUB_AREA,
-    WORLD_NUMBER,
+    GAME_STATE,
     GlobalCoordinate,
+    LEVEL_NAMES,
+    PAGE_SIZE,
+    PLAYER,
+    SCREEN_HEIGHT,
 )
 
 
 class PositionMixin(GameStateMixin):
-    """Mixin class providing position and coordinate properties for SMB2 environment."""
+    """Mixin class providing position, world, and coordinate properties for SMB2 environment."""
+
+    @property
+    def world(self) -> int:
+        """Get current world number (1-based for display)."""
+        return self._read_ram_safe(GAME_STATE.WORLD_NUMBER, default=0) + 1
+
+    @property
+    def level(self) -> str:
+        """Get current level string (e.g., '1-1', '7-2')."""
+        level_id = self._read_ram_safe(GAME_STATE.CURRENT_LEVEL, default=0)
+        return LEVEL_NAMES.get(level_id, f"L-{level_id:02X}")
+
+    def _x_position_global_raw(self) -> int:
+        """Get player global X position (raw, without transition handling)."""
+        x_page = self._read_ram_safe(PLAYER.X_PAGE, default=0)
+        x_pos = self._read_ram_safe(PLAYER.X_POSITION, default=0)
+        return (x_page * PAGE_SIZE) + x_pos
 
     @property
     def x_position_global(self) -> int:
-        """Get player global X position."""
-        x_page = self._read_ram_safe(PLAYER_X_PAGE, default=0)
-        x_pos = self._read_ram_safe(PLAYER_X_POSITION, default=0)
-        return (x_page * PAGE_SIZE) + x_pos
+        """Get player global X position from global coordinate system."""
+        return self.global_coordinate_system.global_x
 
     @property
     def x_position(self) -> int:
         """Get player local X position (on current page)."""
-        x_pos = self._read_ram_safe(PLAYER_X_POSITION, default=0)
-        return x_pos
+        return self._read_ram_safe(PLAYER.X_POSITION, default=0)
 
     @property
     def x_page(self) -> int:
         """Get the X page of the player position."""
-        x_page = self._read_ram_safe(PLAYER_X_PAGE)
-        return x_page
+        return self._read_ram_safe(PLAYER.X_PAGE, default=0)
 
     def _transform_y_coordinate(self, y_page: int, y_pos_raw: int) -> int:
         """Transform raw Y coordinates to inverted system (y=0 at bottom, increasing upward).
 
         Args:
             y_page: Y page value from RAM
-            y_pos: Y position value from RAM
+            y_pos_raw: Y position value from RAM
 
         Returns:
             Inverted Y coordinate
@@ -64,67 +69,62 @@ class PositionMixin(GameStateMixin):
 
         return max_y_in_level - y_pos_global - 1
 
+    def _y_position_global_raw(self) -> int:
+        """Get player global Y position (raw, without transition handling)."""
+        y_page = self._read_ram_safe(PLAYER.Y_PAGE, default=0)
+        y_pos_raw = self._get_y_position(PLAYER.Y_POSITION)
+        return self._transform_y_coordinate(y_page, y_pos_raw)
+
     @property
     def y_position_global(self) -> int:
-        """Get player global Y position (with y=0 at bottom, increasing upward)."""
-        y_page = self._read_ram_safe(PLAYER_Y_PAGE, default=0)
-        y_pos_raw = self._get_y_position(PLAYER_Y_POSITION)
-        return self._transform_y_coordinate(y_page, y_pos_raw)
+        """Get player global Y position from global coordinate system."""
+        return self.global_coordinate_system.global_y
 
     @property
     def y_position(self) -> int:
         """Get player local Y position (with y=0 at bottom, increasing upward)."""
-        y_pos = self._get_y_position(PLAYER_Y_POSITION)
+        y_pos = self._get_y_position(PLAYER.Y_POSITION)
         # Invert the y-coordinate within the screen space
         return SCREEN_HEIGHT - 1 - y_pos
 
     @property
     def y_page(self) -> int:
         """Get the Y page of the player position."""
-        y_page = self._read_ram_safe(PLAYER_Y_PAGE)
+        y_page = self._read_ram_safe(PLAYER.Y_PAGE, default=0)
         if y_page == 255:  # Screen wrap around
             return 0
         return y_page
 
     @property
-    def world(self) -> int:
-        """Get current world number. RAM is 0-based, display is 1-based."""
-        return self._read_ram_safe(WORLD_NUMBER, default=0) + 1
-
-    @property
     def area(self) -> int:
         """Get current area."""
-        area = self._read_ram_safe(AREA, default=0)
-        return area
+        return self._read_ram_safe(GAME_STATE.AREA, default=0)
 
     @property
     def sub_area(self) -> int:
         """Get current sub-area."""
-        sub_area = self._read_ram_safe(SUB_AREA, default=0)
-        return sub_area
+        return self._read_ram_safe(GAME_STATE.SUB_AREA, default=0)
 
     @property
     def spawn_page(self) -> int:
         """Get current spawn page/entry point."""
-        page = self._read_ram_safe(PAGE, default=0)
-        return page
+        return self._read_ram_safe(GAME_STATE.PAGE, default=0)
 
     @property
     def current_page_position(self) -> int:
         """Get current page position in sub-area."""
-        page_pos = self._read_ram_safe(CURRENT_PAGE_POSITION, default=0)
-        return page_pos
+        return self._read_ram_safe(GAME_STATE.CURRENT_PAGE_POSITION, default=0)
 
     @property
     def total_pages_in_sub_area(self) -> int:
         """Get total number of pages in the current sub-area."""
-        total_pages = self._read_ram_safe(TOTAL_PAGES_IN_SUB_AREA, default=0)
+        total_pages = self._read_ram_safe(GAME_STATE.TOTAL_PAGES_IN_SUB_AREA, default=0)
         return total_pages + 1  # zero indexed
 
     @property
     def is_vertical_area(self) -> bool:
         """Check if current area has vertical scrolling."""
-        direction = self._read_ram_safe(SCROLL_DIRECTION, default=0)
+        direction = self._read_ram_safe(GAME_STATE.SCROLL_DIRECTION, default=0)
         return not bool(direction)
 
     @property
@@ -147,8 +147,8 @@ class PositionMixin(GameStateMixin):
             GlobalCoordinate: NamedTuple with area, sub_area, global_x, global_y
         """
         current_sub_area = self.sub_area
-        current_x = self.x_position_global
-        current_y = self.y_position_global
+        current_x = self._x_position_global_raw()
+        current_y = self._y_position_global_raw()
 
         # Check if we're in a transition state where sub_area changed but coordinates haven't
         if (self._previous_sub_area is not None and \

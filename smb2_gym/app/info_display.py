@@ -5,11 +5,96 @@ from typing import Any
 import pygame
 
 from ..constants import CHARACTER_NAMES
+from ..constants.object_ids import (
+    CollisionFlags,
+    EnemyId,
+    EnemyState,
+    PlayerState,
+    SpriteFlags,
+)
 
 
 def get_required_info_height(scale: int = 1) -> int:
     """Get the minimum height needed for the info display."""
-    return 300 * scale // 2  # Height for table display
+    # Base: 18 info rows + 9 enemy slots = 27 rows total
+    # 27 rows * 18 pixels + 4 separators * 6 pixels = 486 + 24 = 510 pixels
+    return 510 * scale // 2
+
+
+def format_enemy_name(enemy_id: int | None) -> str:
+    """Format enemy name from ID.
+
+    Args:
+        enemy_id: Enemy ID from RAM or None if not present
+
+    Returns:
+        Formatted string like "TWEETER" or "" if no enemy
+    """
+    if enemy_id is None:
+        return ""
+    try:
+        enemy_name = EnemyId(enemy_id).name
+        return enemy_name
+    except ValueError:
+        return f"UNKNOWN_{enemy_id:02X}"
+
+
+def format_collision_flags(collision: int | None) -> str:
+    """Format collision flags as names.
+
+    Args:
+        collision: Collision flags bitfield or None
+
+    Returns:
+        Comma-separated flag names or "" if no collision
+    """
+    if collision is None or collision == 0:
+        return ""
+
+    flags = []
+    for flag in CollisionFlags:
+        if flag != CollisionFlags.NONE and collision & flag:
+            flags.append(flag.name)
+
+    return ",".join(flags) if flags else ""
+
+
+def format_sprite_flags(sprite_flags: int | None) -> str:
+    """Format sprite flags as names.
+
+    Args:
+        sprite_flags: Sprite flags bitfield or None
+
+    Returns:
+        Comma-separated flag names or "" if no flags
+    """
+    if sprite_flags is None or sprite_flags == 0:
+        return ""
+
+    flags = []
+    for flag in SpriteFlags:
+        if flag != SpriteFlags.NONE and sprite_flags & flag:
+            flags.append(flag.name)
+
+    return ",".join(flags) if flags else ""
+
+
+def format_enemy_state(state: int, has_enemy: bool) -> str:
+    """Format enemy state as name.
+
+    Args:
+        state: Enemy state value
+        has_enemy: Whether there's an enemy in this slot
+
+    Returns:
+        State name like "VISIBLE", "DEAD", or empty string if no enemy
+    """
+    if not has_enemy:
+        return ""
+    try:
+        return EnemyState(state).name
+    except ValueError:
+        return str(state)
 
 
 def create_info_panel(
@@ -50,103 +135,145 @@ def create_info_panel(
     x_start = padding
     y_start = game_height + padding
 
-    # Create all data rows
+    # Extract accessor objects
+    pc = info['pc']
+    pos = info['pos']
+    game = info['game']
+    enemies = info['enemies']
+
+    # Create all data rows organized into sections
     data = [
+        # POSITION SECTION
+        ("POSITION", "", "", ""),
+        ("Level", game.level, "World", str(game.world)),
+        ("Area", f"{pos.area}-{pos.sub_area}", "Subspace Status", str(pc.subspace_status)),
         (
-            "Character", CHARACTER_NAMES.get(info['character'],
-                                             'Unknown'), "Lives", str(info['life'])
-        ),
-        ("Hearts", f"{info['hearts']}/4", "World", str(info['world'])),
-        ("Level", info['level'], "Area", f"{info['area']}-{info['sub_area']}"),
-        ("X Position", str(info['x_pos_local']), "Y Position", str(info['y_pos_local'])),
-        ("X Page", str(info['x_page']), "Y Page", str(info['y_page'])),
-        ("Global X", str(info['x_pos_global']), "Global Y", str(info['y_pos_global'])),
-        ("Player Speed", str(info['player_speed']), "On Vine", "Yes" if info['on_vine'] else "No"),
-        (
-            "Holding Item", "Yes" if info['holding_item'] else "No", "Item Pulled",
-            str(info['item_pulled'])
+            "Local (X, Y)", f"({pos.x_local}, {pos.y_local})", "Global (X, Y)",
+            f"({pos.x_global}, {pos.y_global})"
         ),
         (
-            "Current Page", str(info['current_page_position']), "Total Pages",
-            str(info['total_pages_in_sub_area'])
+            "Page (X, Y)", f"({pos.x_page}, {pos.y_page})", "Current/Total",
+            f"{pos.current_page}/{pos.total_pages}"
+        ),
+        ("Vertical Area", "Yes" if pos.is_vertical else "No", "Spawn Page", str(pos.spawn_page)),
+
+        # PLAYER SECTION
+        ("PLAYER", "", "", ""),
+        ("Character", CHARACTER_NAMES.get(pc.character, 'Unknown'), "Lives", str(pc.lives)),
+        ("Hearts", f"{pc.hearts}/4", "Player Speed", str(pc.speed)),
+        ("Cherries", str(pc.cherries), "Coins", str(pc.coins)),
+        ("Holding Item", "Yes" if pc.holding_item else "No", "Item Pulled", str(pc.item_pulled)),
+        (
+            "Big Veggies Pulled", str(pc.big_vegetables_pulled), "On Vine",
+            "Yes" if pc.on_vine else "No"
+        ),
+        ("Starman Timer", str(pc.starman_timer), "Subspace Timer", str(pc.subspace_timer)),
+        ("Stopwatch Timer", str(pc.stopwatch_timer), "Float Timer", f"{pc.float_timer}/60"),
+        (
+            "Invuln Timer", str(pc.invulnerability_timer), "Door Timer",
+            str(pc.door_transition_timer)
         ),
         (
-            "Vertical Area", "Yes" if info['is_vertical_area'] else "No", "Spawn Page",
-            str(info['spawn_page'])
-        ),
-        ("Cherries", str(info['cherries']), "Coins", str(info['coins'])),
-        (
-            "Starman Timer", str(info['starman_timer']), "Subspace Timer",
-            str(info['subspace_timer'])
+            "Level Completed", "Yes" if pc.level_completed else "No", "Player State",
+            PlayerState(pc.state).name
+            if pc.state in [ps.value for ps in PlayerState] else str(pc.state)
         ),
         (
-            "Stopwatch Timer", str(info['stopwatch_timer']), "Float Timer",
-            f"{info['float_timer']}/60"
-        ),
-        ("Invuln Timer", str(info['invulnerability_timer']), "Enemies Defeated", str(info['enemies_defeated'])),
-        (
-            "Vegetables Pulled", str(info['vegetables_pulled']), "Door Timer",
-            str(info['door_transition_timer'])
+            "Mario Levels", str(pc.levels_finished['mario']), "Luigi Levels",
+            str(pc.levels_finished['luigi'])
         ),
         (
-            "Subspace Status", str(info['subspace_status']), "Level Completed",
-            "Yes" if info['level_completed'] else "No"
+            "Peach Levels", str(pc.levels_finished['peach']), "Toad Levels",
+            str(pc.levels_finished['toad'])
         ),
 
-        # Level completion per character
+        # ENEMIES SECTION
+        ("ENEMIES", "", "", ""),
         (
-            "Mario Levels", str(info['levels_finished']['mario']), "Luigi Levels",
-            str(info['levels_finished']['luigi'])
-        ),
-        (
-            "Peach Levels", str(info['levels_finished']['peach']), "Toad Levels",
-            str(info['levels_finished']['toad'])
+            "Slot", "Name", "HP", "(X, Y)", "Rel (X, Y)", "Vel (X, Y)", "State", "Timer", "Flags",
+            "Collision"
         ),
 
-        # Enemy positions (relative to player) and HP
-        (
-            "Enemy 1 Rel X/Y", f"{info['enemy_x_positions_relative'][4]}/{info['enemy_y_positions_relative'][4]}",
-            "Enemy 1 HP", str(info['enemy_hp'][4])
-        ),
-        (
-            "Enemy 2 Rel X/Y", f"{info['enemy_x_positions_relative'][3]}/{info['enemy_y_positions_relative'][3]}",
-            "Enemy 2 HP", str(info['enemy_hp'][3])
-        ),
-        (
-            "Enemy 3 Rel X/Y", f"{info['enemy_x_positions_relative'][2]}/{info['enemy_y_positions_relative'][2]}",
-            "Enemy 3 HP", str(info['enemy_hp'][2])
-        ),
-        (
-            "Enemy 4 Rel X/Y", f"{info['enemy_x_positions_relative'][1]}/{info['enemy_y_positions_relative'][1]}",
-            "Enemy 4 HP", str(info['enemy_hp'][1])
-        ),
-        (
-            "Enemy 5 Rel X/Y", f"{info['enemy_x_positions_relative'][0]}/{info['enemy_y_positions_relative'][0]}",
-            "Enemy 5 HP", str(info['enemy_hp'][0])
-        ),
+        # Enemy table - all 9 slots, one row per enemy
+        *[
+            (
+                f"{e.slot_number}", format_enemy_name(e.object_type),
+                str(e.health) if e.health is not None else "", f"({e.x_position}, {e.y_position})"
+                if e.x_position is not None and e.y_position is not None else "",
+                f"({e.relative_x(pos.x_global)}, {e.relative_y(pos.y_global)})"
+                if e.relative_x(pos.x_global) is not None and e.relative_y(pos.y_global) is not None
+                else "", f"({e.x_velocity}, {e.y_velocity})"
+                if e.x_velocity is not None and e.y_velocity is not None else "",
+                format_enemy_state(e.state, e.object_type is not None),
+                str(e.object_timer) if e.object_timer is not None else "",
+                format_sprite_flags(e.sprite_flags), format_collision_flags(e.collision)
+            ) for e in enemies
+        ],
     ]
 
     # Draw the table
     current_y = y_start
 
     for i, row in enumerate(data):
-        # Draw two label-value pairs per row
-        # First pair
-        label1_surface = font.render(row[0] + ":", True, label_color)
-        value1_surface = font.render(row[1], True, value_color)
-        screen.blit(label1_surface, (x_start, current_y))
-        screen.blit(value1_surface, (x_start + col_width, current_y))
+        # Check if this is a section header (4-column row with empty strings in cols 2-4)
+        is_section_header = (len(row) == 4 and row[1] == "" and row[2] == "" and row[3] == "")
 
-        # Second pair
-        label2_surface = font.render(row[2] + ":", True, label_color)
-        value2_surface = font.render(row[3], True, value_color)
-        screen.blit(label2_surface, (x_start + col_width * 2, current_y))
-        screen.blit(value2_surface, (x_start + col_width * 3, current_y))
+        # Draw line before section header
+        if is_section_header:
+            pygame.draw.line(
+                screen, (60, 60, 60), (x_start, current_y), (screen_width - padding, current_y), 1
+            )
+            current_y += 6
+
+        # Check if this is a multi-column enemy table row (10 columns)
+        if len(row) == 10:
+            # Enemy table: custom column widths
+            # Slot(small), Name(big), HP, (X,Y), (RelX,RelY), Vel(X,Y), State, Timer, Flags(bigger), Collision(bigger)
+            total_width = screen_width - 2 * padding
+            base_width = total_width // 10
+            col_widths = [
+                int(base_width * 0.5),  # Slot - smaller
+                int(base_width * 1.5),  # Name - bigger
+                int(base_width * 0.3),  # HP - smaller
+                int(base_width * 0.9),  # (X, Y)
+                int(base_width * 0.9),  # (RelX, RelY)
+                int(base_width * 0.9),  # Vel (X, Y) - signed velocities
+                int(base_width * 0.8),  # State - bigger (VISIBLE, INVISIBLE, DEAD)
+                int(base_width * 0.5),  # Timer - smaller
+                int(base_width * 1.4),  # Flags - bigger for multiple flags
+                int(base_width * 1.4)  # Collision - bigger for multiple flags
+            ]
+
+            x_offset = x_start
+            for j, cell in enumerate(row):
+                # Use header color for enemy table header row (index 14)
+                # POSITION (0-6 = 7 rows), PLAYER (7-13 = 7 rows), ENEMIES header (14), enemy header (15), enemies (16-24)
+                color = header_color if i == 15 else value_color
+                cell_surface = font.render(str(cell), True, color)
+                screen.blit(cell_surface, (x_offset, current_y))
+                x_offset += col_widths[j]
+        elif is_section_header:
+            # Section header - render in blue, centered, no colon
+            header_surface = font.render(row[0], True, header_color)
+            screen.blit(header_surface, (x_start, current_y))
+        else:
+            # Regular 4-column layout (label-value pairs)
+            label1_surface = font.render(row[0] + ":", True, label_color)
+            value1_surface = font.render(row[1], True, value_color)
+            screen.blit(label1_surface, (x_start, current_y))
+            screen.blit(value1_surface, (x_start + col_width, current_y))
+
+            # Don't add colon to column 3 if it's empty (for headers)
+            label2_text = row[2] + ":" if row[2] else ""
+            label2_surface = font.render(label2_text, True, label_color)
+            value2_surface = font.render(row[3], True, value_color)
+            screen.blit(label2_surface, (x_start + col_width * 2, current_y))
+            screen.blit(value2_surface, (x_start + col_width * 3, current_y))
 
         current_y += line_height
 
-        # Draw thin line after first 3 rows
-        if i in [2, 5, 15, 17]:
+        # Draw line after section headers and enemy table header (but not between enemy slots)
+        if is_section_header or i == 15:  # After section headers or enemy table header only
             pygame.draw.line(
                 screen, (60, 60, 60), (x_start, current_y + 2),
                 (screen_width - padding, current_y + 2), 1
@@ -165,4 +292,3 @@ def draw_info(
 ) -> None:
     """Legacy function for compatibility."""
     create_info_panel(screen, info, font, start_y, screen_width)
-

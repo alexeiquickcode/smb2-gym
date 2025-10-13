@@ -3,11 +3,13 @@
 import argparse
 import os
 import sys
+import traceback
 from typing import (
     Optional,
     Union,
 )
 
+import numpy as np
 import pygame
 
 from smb2_gym.actions import actions_to_buttons
@@ -16,19 +18,102 @@ from smb2_gym.app.info_display import (
     create_info_panel,
     get_required_info_height,
 )
-from smb2_gym.app.keyboard import (
-    ALT_KEYBOARD_MAPPING,
-    KEYBOARD_MAPPING,
-)
+from smb2_gym.app.keyboard import KEYBOARD_MAPPING
 from smb2_gym.app.rendering import render_frame
 from smb2_gym.constants import (
     DEFAULT_SCALE,
     FONT_SIZE_BASE,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
+    TILE_COLORS,
     WINDOW_CAPTION,
+    FineTileType,
 )
 from smb2_gym.smb2_env import SuperMarioBros2Env
+
+
+def draw_semantic_map(
+    surface: pygame.Surface,
+    semantic_map: np.ndarray,
+    x_offset: int,
+    y_offset: int,
+    tile_size: int,
+) -> None:
+    """Draw the semantic tile map on the surface.
+
+    Args:
+        semantic_map: Structured array with 'fine_type', 'color_r', 'color_g', 'color_b' fields
+    """
+    height, width = semantic_map.shape
+
+    for y in range(height):
+        for x in range(width):
+            # Extract RGB color directly from structured array
+            color = (
+                int(semantic_map[y, x]['color_r']),
+                int(semantic_map[y, x]['color_g']),
+                int(semantic_map[y, x]['color_b']),
+            )
+
+            # Calculate position
+            screen_y = y * tile_size + y_offset
+            screen_x = x * tile_size + x_offset
+
+            rect = pygame.Rect(screen_x, screen_y, tile_size, tile_size)
+            pygame.draw.rect(surface, color, rect)
+            pygame.draw.rect(surface, (0, 0, 0), rect, 1)  # Black border
+
+
+def draw_player_position(
+    surface: pygame.Surface,
+    env: SuperMarioBros2Env,
+    x_offset: int,
+    y_offset: int,
+    tile_size: int,
+) -> None:
+    """Draw player position on the collision map."""
+    # Get player collision tiles from the environment
+    player_tiles = env.get_player_collision_tiles()
+
+    for tile_x, tile_y in player_tiles:
+        screen_x = tile_x * tile_size + x_offset + tile_size // 2
+        screen_y = tile_y * tile_size + y_offset + tile_size // 2
+        pygame.draw.circle(surface, (255, 255, 255), (screen_x, screen_y), tile_size // 3)
+        pygame.draw.circle(surface, (255, 0, 0), (screen_x, screen_y), tile_size // 3, 2)
+
+
+def draw_legend(
+    surface: pygame.Surface,
+    font: pygame.font.Font,
+    x_offset: int,
+    y_offset: int,
+) -> None:
+    """Draw a legend for semantic tile types."""
+    y_pos = y_offset
+
+    # Iterate through all FineTileType enum values
+    for tile_type in FineTileType:
+        # Skip EMPTY for cleaner legend
+        if tile_type == FineTileType.EMPTY:
+            continue
+
+        color = TILE_COLORS.get(tile_type, (128, 128, 128))
+
+        # Draw color box
+        rect = pygame.Rect(x_offset, y_pos, 16, 16)
+        pygame.draw.rect(surface, color, rect)
+        pygame.draw.rect(surface, (0, 0, 0), rect, 1)
+
+        # Draw text using enum name
+        text = font.render(tile_type.name, True, (255, 255, 255))
+        surface.blit(text, (x_offset + 20, y_pos))
+
+        y_pos += 20
+
+
+# ------------------------------------------------------------------------------
+# ---- Main Fn -----------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 
 def play_human(
@@ -63,13 +148,21 @@ def play_human(
     # Create env
     env = SuperMarioBros2Env(init_config=config)
 
-    # Setup pygame
-    width, height = SCREEN_WIDTH * scale, SCREEN_HEIGHT * scale
+    # Setup pygame - wider window for side-by-side display
+    game_width = SCREEN_WIDTH * scale
+    game_height = SCREEN_HEIGHT * scale
+    semantic_map_width = 16 * 20  # 16 tiles * 20 pixels per tile
+    semantic_map_height = 15 * 20  # 15 tiles * 20 pixels per tile
+
+    total_width = game_width + semantic_map_width + 200  # Extra space for legend
+    total_height = max(game_height, semantic_map_height) + 100  # Extra space for info
+
     info_height = get_required_info_height(scale)
-    screen = pygame.display.set_mode((width, height + info_height))
+    screen = pygame.display.set_mode((total_width, total_height + info_height))
     pygame.display.set_caption(WINDOW_CAPTION)
     font_size = FONT_SIZE_BASE * scale // 2
     font = pygame.font.Font(None, font_size)
+    small_font = pygame.font.Font(None, 16)
     clock = pygame.time.Clock()  # Clock for FPS
 
     # Reset environment
@@ -88,10 +181,6 @@ def play_human(
     print("    P: Pause")
     print("    R: Reset")
     print("    ESC: Quit")
-    print("\nAlternative controls:")
-    print("    WASD: Move")
-    print("    J: A button")
-    print("    K: B button")
     print("\nSave State:")
     print("    F5: Save state (creates save_state_0.sav)")
     print("    F9: Load state (loads save_state_0.sav)")
@@ -130,8 +219,8 @@ def play_human(
             # Get keyboard state
             keys = pygame.key.get_pressed()
 
-            # Check both keyboard mappings
-            for key, action in {**KEYBOARD_MAPPING, **ALT_KEYBOARD_MAPPING}.items():
+            # Check keyboard mappings
+            for key, action in KEYBOARD_MAPPING.items():
                 if keys[key]:
                     if action not in keys_pressed:
                         keys_pressed.append(action)
@@ -174,13 +263,41 @@ def play_human(
             #         print("Game Over! Press R (in game window) to reset or ESC to quit.")
             #         game_over = True
 
-        render_frame(screen, obs, width, height)
-        create_info_panel(screen, info, font, height, width)
+        # Clear screen
+        screen.fill((40, 40, 40))
+
+        # Render game on the left side
+        game_surface = pygame.Surface((game_width, game_height))
+        render_frame(game_surface, obs, game_width, game_height)
+        screen.blit(game_surface, (10, 10))
+
+        # Get and render semantic map on the right side
+        semantic_map = env.semantic_map
+        map_x_offset = game_width + 30
+        map_y_offset = 10
+        tile_size = 20
+
+        draw_semantic_map(screen, semantic_map, map_x_offset, map_y_offset, tile_size)
+        draw_player_position(screen, env, map_x_offset, map_y_offset, tile_size)
+
+        # Draw semantic map title
+        title_text = font.render("Semantic Map", True, (255, 255, 255))
+        screen.blit(title_text, (map_x_offset, map_y_offset - 30))
+
+        # Draw legend
+        legend_x = map_x_offset + (16 * tile_size) + 10
+        legend_y = map_y_offset
+        legend_title = small_font.render("Legend:", True, (255, 255, 255))
+        screen.blit(legend_title, (legend_x, legend_y))
+        draw_legend(screen, small_font, legend_x, legend_y + 20)
+
+        # Draw game info panel at bottom
+        create_info_panel(screen, info, font, total_height, total_width)
 
         # Draw pause indicator
         if paused:
             pause_text = font.render("PAUSED", True, (255, 255, 0))
-            text_rect = pause_text.get_rect(center=(width // 2, height // 2))
+            text_rect = pause_text.get_rect(center=(total_width // 2, total_height // 2))
             screen.blit(pause_text, text_rect)
 
         # Update display
@@ -296,10 +413,10 @@ def main() -> None:
     except ValueError as e:
         parser.error(str(e))
     except FileNotFoundError as e:
-        print(f"Error: {e}")
+        traceback.print_exc()
         sys.exit(1)
     except Exception as e:
-        print(f"Error: {e}")
+        traceback.print_exc()
         sys.exit(1)
 
 

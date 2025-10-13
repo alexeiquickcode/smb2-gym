@@ -4,16 +4,7 @@ from typing import Literal
 
 import numpy as np
 
-from .constants import (
-    BUTTON_A,
-    BUTTON_B,
-    BUTTON_DOWN,
-    BUTTON_LEFT,
-    BUTTON_RIGHT,
-    BUTTON_SELECT,
-    BUTTON_START,
-    BUTTON_UP,
-)
+from .constants import Buttons
 
 ActionType = Literal["all", "complex", "simple"]
 
@@ -50,16 +41,16 @@ COMPLEX_ACTIONS = [
 ]
 
 BUTTON_MAP = {
-    'a': BUTTON_A,
-    'A': BUTTON_A,
-    'b': BUTTON_B,
-    'B': BUTTON_B,
-    'select': BUTTON_SELECT,
-    'start': BUTTON_START,
-    'up': BUTTON_UP,
-    'down': BUTTON_DOWN,
-    'left': BUTTON_LEFT,
-    'right': BUTTON_RIGHT,
+    'a': Buttons.A,
+    'A': Buttons.A,
+    'b': Buttons.B,
+    'B': Buttons.B,
+    'select': Buttons.SELECT,
+    'start': Buttons.START,
+    'up': Buttons.UP,
+    'down': Buttons.DOWN,
+    'left': Buttons.LEFT,
+    'right': Buttons.RIGHT,
     'noop': None
 }
 
@@ -129,18 +120,18 @@ def buttons_to_action_index(buttons: np.ndarray, action_set: list[list[str]]) ->
     """
     # Convert button state to action list
     pressed = []
-    if buttons[BUTTON_RIGHT]:
+    if buttons[Buttons.RIGHT]:
         pressed.append('right')
-    elif buttons[BUTTON_LEFT]:
+    elif buttons[Buttons.LEFT]:
         pressed.append('left')
-    elif buttons[BUTTON_DOWN]:
+    elif buttons[Buttons.DOWN]:
         pressed.append('down')
-    elif buttons[BUTTON_UP]:
+    elif buttons[Buttons.UP]:
         pressed.append('up')
 
-    if buttons[BUTTON_A]:
+    if buttons[Buttons.A]:
         pressed.append('A')
-    if buttons[BUTTON_B]:
+    if buttons[Buttons.B]:
         pressed.append('B')
 
     # Find matching action in the action set

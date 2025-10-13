@@ -1,0 +1,459 @@
+"""Background tile and object IDs from SMB2."""
+
+from enum import (
+    IntEnum,
+    IntFlag,
+)
+
+
+class CollisionFlags(IntFlag):
+    """Collision flags bitfield from SMB2.
+
+    Used in EnemyCollision ($005B-$0063) and PlayerCollision ($005A).
+    Tracks runtime collision detection results (what type of collision occurred).
+
+    Reference: https://github.com/Xkeeper0/smb2
+    """
+    NONE = 0x00
+    RIGHT = 0x01
+    LEFT = 0x02
+    DOWN = 0x04
+    UP = 0x08
+    DAMAGE = 0x10
+    PLAYER_ON_TOP = 0x20
+    PLAYER_INSIDE = 0x40
+    FLAG_80 = 0x80
+
+
+class SpriteFlags(IntFlag):
+    """Sprite property flags bitfield from SMB2.
+
+    Used in SpriteFlags46E ($046E-$0475, one byte per enemy slot).
+    Defines inherent sprite/enemy properties set at spawn time.
+
+    Reference: https://github.com/Xkeeper0/smb2/blob/master/src/defs.asm
+    """
+    NONE = 0x00
+    DAMAGE_FROM_ABOVE = 0x01  # Causes damage when touched from above
+    UNLIFTABLE = 0x02  # Cannot be picked up by player
+    NO_ENEMY_COLLISION = 0x04  # Disables collision with other enemies
+    DEATH_SQUAWK = 0x08  # Squawk on death (and prevents despawning offscreen)
+    TILEMAP2 = 0x10  # Uses alternate tilemap
+    WIDE_SPRITE = 0x20  # Wide sprite (only used for Mouser)
+    DOUBLE_SPEED = 0x40  # Moves at double speed
+    MIRROR_ANIMATION = 0x80  # Mirror sprite animation
+
+
+class PlayerState(IntEnum):
+    """Player state constants from SMB2."""
+    NORMAL = 0x00
+    CLIMBING = 0x01
+    LIFTING = 0x02
+    CLIMBING_AREA_TRANSITION = 0x03
+    GOING_DOWN_JAR = 0x04
+    EXITING_JAR = 0x05
+    HAWKMOUTH_EATING = 0x06
+    DYING = 0x07
+    CHANGING_SIZE = 0x08
+
+
+class EnemyState(IntEnum):
+    """Enemy state values."""
+    INVISIBLE = 0x00
+    VISIBLE = 0x01
+    DEAD = 0x02
+
+
+class EnemyId(IntEnum):
+    """Enemy IDs from SMB2 (RAM addresses $0090-$0094).
+
+    Reference: https://github.com/Xkeeper0/smb2
+    """
+    HEART = 0x00
+    SHYGUY_RED = 0x01
+    TWEETER = 0x02
+    SHYGUY_PINK = 0x03
+    PORCUPO = 0x04
+    SNIFIT_RED = 0x05
+    SNIFIT_GRAY = 0x06
+    SNIFIT_PINK = 0x07
+    OSTRO = 0x08
+    BOB_OMB = 0x09
+    ALBATOSS_CARRYING_BOB_OMB = 0x0A
+    ALBATOSS_START_RIGHT = 0x0B
+    ALBATOSS_START_LEFT = 0x0C
+    NINJI_RUNNING = 0x0D
+    NINJI_JUMPING = 0x0E
+    BEEZO_DIVING = 0x0F
+    BEEZO_STRAIGHT = 0x10
+    WART_BUBBLE = 0x11
+    PIDGIT = 0x12
+    TROUTER = 0x13
+    HOOPSTAR = 0x14
+    JAR_GENERATOR_SHYGUY = 0x15
+    JAR_GENERATOR_BOB_OMB = 0x16
+    PHANTO = 0x17
+    COBRAT_JAR = 0x18
+    COBRAT_SAND = 0x19
+    POKEY = 0x1A
+    BULLET = 0x1B
+    BIRDO = 0x1C
+    MOUSER = 0x1D
+    EGG = 0x1E
+    TRYCLYDE = 0x1F
+    FIREBALL = 0x20
+    CLAWGRIP = 0x21
+    CLAWGRIP_ROCK = 0x22
+    PANSER_STATIONARY_FIRES_ANGLED = 0x23
+    PANSER_WALKING = 0x24
+    PANSER_STATIONARY_FIRES_UP = 0x25
+    AUTOBOMB = 0x26
+    AUTOBOMB_FIRE = 0x27
+    WHALE_SPOUT = 0x28
+    FLURRY = 0x29
+    FRYGUY = 0x2A
+    FRYGUY_SPLIT = 0x2B
+    WART = 0x2C
+    HAWKMOUTH_BOSS = 0x2D
+    SPARK1 = 0x2E
+    SPARK2 = 0x2F
+    SPARK3 = 0x30
+    SPARK4 = 0x31
+    VEGETABLE_SMALL = 0x32
+    VEGETABLE_LARGE = 0x33
+    VEGETABLE_WART = 0x34
+    SHELL = 0x35
+    COIN = 0x36
+    BOMB = 0x37
+    ROCKET = 0x38
+    MUSHROOM_BLOCK = 0x39
+    POW_BLOCK = 0x3A
+    FALLING_LOGS = 0x3B
+    SUBSPACE_DOOR = 0x3C
+    KEY = 0x3D
+    SUBSPACE_POTION = 0x3E
+    MUSHROOM = 0x3F
+    MUSHROOM_1UP = 0x40
+    FLYING_CARPET = 0x41
+    HAWKMOUTH_RIGHT = 0x42
+    HAWKMOUTH_LEFT = 0x43
+    CRYSTAL_BALL = 0x44
+    STARMAN = 0x45
+    STOPWATCH = 0x46
+    ATTACK_ALBATOSS_CARRYING_BOB_OMB = 0x47
+    ATTACK_BEEZO = 0x48
+    STOP_ATTACK = 0x49
+    VEGETABLE_THROWER = 0x4A
+    UNKNOWN_4B = 0x4B
+    UNKNOWN_4C = 0x4C
+    UNKNOWN_4D = 0x4D
+    UNKNOWN_4E = 0x4E
+    UNKNOWN_4F = 0x4F
+    UNKNOWN_50 = 0x50
+    UNKNOWN_51 = 0x51
+    UNKNOWN_52 = 0x52
+    UNKNOWN_53 = 0x53
+    UNKNOWN_54 = 0x54
+    UNKNOWN_55 = 0x55
+    UNKNOWN_56 = 0x56
+    UNKNOWN_57 = 0x57
+    UNKNOWN_58 = 0x58
+    UNKNOWN_59 = 0x59
+    UNKNOWN_5A = 0x5A
+    UNKNOWN_5B = 0x5B
+    BOSS_BIRDO = 0x5C
+    BOSS_MOUSER = 0x5D
+    BOSS_EGG = 0x5E
+    BOSS_TRYCLYDE = 0x5F
+    BOSS_FIREBALL = 0x60
+    BOSS_CLAWGRIP = 0x61
+    BOSS_CLAWGRIP_ROCK = 0x62
+    BOSS_PANSER_STATIONARY_FIRES_ANGLED = 0x63
+    BOSS_PANSER_WALKING = 0x64
+    BOSS_PANSER_STATIONARY_FIRES_UP = 0x65
+    BOSS_AUTOBOMB = 0x66
+    BOSS_AUTOBOMB_FIRE = 0x67
+    BOSS_WHALE_SPOUT = 0x68
+    BOSS_FLURRY = 0x69
+    BOSS_FRYGUY = 0x6A
+    BOSS_FRYGUY_SPLIT = 0x6B
+    BOSS_WART = 0x6C
+    BOSS_HAWKMOUTH_BOSS = 0x6D
+    BOSS_SPARK1 = 0x6E
+    BOSS_SPARK2 = 0x6F
+    BOSS_SPARK3 = 0x70
+    BOSS_SPARK4 = 0x71
+    BOSS_VEGETABLE_SMALL = 0x72
+    BOSS_VEGETABLE_LARGE = 0x73
+    BOSS_VEGETABLE_WART = 0x74
+    BOSS_SHELL = 0x75
+    BOSS_COIN = 0x76
+    BOSS_BOMB = 0x77
+    BOSS_ROCKET = 0x78
+    BOSS_MUSHROOM_BLOCK = 0x79
+    BOSS_POW_BLOCK = 0x7A
+    BOSS_FALLING_LOGS = 0x7B
+    BOSS_SUBSPACE_DOOR = 0x7C
+    BOSS_KEY = 0x7D
+    BOSS_SUBSPACE_POTION = 0x7E
+    BOSS_MUSHROOM = 0x7F
+
+
+class BackgroundTile(IntEnum):
+    """Background tile IDs from SMB2."""
+    BLACK = 0x00
+    BG_CLOUD_LEFT = 0x01
+    BG_CLOUD_RIGHT = 0x02
+    BG_CLOUD_SMALL = 0x03
+    WATERFALL_TOP = 0x04
+    WATERFALL = 0x05
+    WATERFALL_SPLASH = 0x06
+    CHAIN = 0x07
+    WATER_TOP = 0x08
+    HOUSE_LEFT = 0x09
+    WATER = 0x0A
+    HOUSE_MIDDLE = 0x0B
+    WATER_WHALE = 0x0C
+    HOUSE_RIGHT = 0x0D
+    UNUSED_0E = 0x0E
+    UNUSED_0F = 0x0F
+    UNUSED_10 = 0x10
+    WATER_WHALE_TAIL = 0x11
+    JUMP_THROUGH_BLOCK = 0x12
+    CLOUD_LEFT = 0x13
+    CLOUD_MIDDLE = 0x14
+    CLOUD_RIGHT = 0x15
+    JUMP_THROUGH_ICE = 0x16
+    CHAIN_STANDABLE = 0x17
+    SOLID_BRICK_0 = 0x18
+    GROUND_BRICK_0 = 0x19
+    SPIKES = 0x1A
+    SOLID_ROUND_BRICK_0 = 0x1B
+    SOLID_BLOCK = 0x1C
+    CACTUS_TOP = 0x1D
+    CACTUS_MIDDLE = 0x1E
+    FROZEN_ROCK = 0x1F
+    LOG_PILLAR_TOP_0 = 0x20
+    LOG_PILLAR_MIDDLE_0 = 0x21
+    CLAW_GRIP_ROCK = 0x22
+    UNUSED_23 = 0x23
+    UNUSED_24 = 0x24
+    UNUSED_25 = 0x25
+    UNUSED_26 = 0x26
+    UNUSED_27 = 0x27
+    UNUSED_28 = 0x28
+    UNUSED_29 = 0x29
+    UNUSED_2A = 0x2A
+    UNUSED_2B = 0x2B
+    UNUSED_2C = 0x2C
+    UNUSED_2D = 0x2D
+    UNUSED_2E = 0x2E
+    UNUSED_2F = 0x2F
+    UNUSED_30 = 0x30
+    UNUSED_31 = 0x31
+    UNUSED_32 = 0x32
+    UNUSED_33 = 0x33
+    UNUSED_34 = 0x34
+    UNUSED_35 = 0x35
+    UNUSED_36 = 0x36
+    UNUSED_37 = 0x37
+    UNUSED_38 = 0x38
+    UNUSED_39 = 0x39
+    UNUSED_3A = 0x3A
+    UNUSED_3B = 0x3B
+    UNUSED_3C = 0x3C
+    UNUSED_3D = 0x3D
+    UNUSED_3E = 0x3E
+    UNUSED_3F = 0x3F
+    SKY = 0x40
+    SUBSPACE_MUSHROOM_1 = 0x41
+    SUBSPACE_MUSHROOM_2 = 0x42
+    GRASS_COIN = 0x43
+    GRASS_LARGE_VEGGIE = 0x44
+    GRASS_SMALL_VEGGIE = 0x45
+    GRASS_ROCKET = 0x46
+    GRASS_SHELL = 0x47
+    GRASS_BOMB = 0x48
+    GRASS_POTION = 0x49
+    GRASS_1UP = 0x4A
+    GRASS_POW = 0x4B
+    GRASS_BOB_OMB = 0x4C
+    GRASS_INACTIVE = 0x4D
+    CHERRY = 0x4E
+    DOOR_TOP = 0x4F
+    DOOR_BOTTOM_LOCK = 0x50
+    DOOR_BOTTOM = 0x51
+    LIGHT_DOOR = 0x52
+    LIGHT_TRAIL_RIGHT = 0x53
+    LIGHT_TRAIL = 0x54
+    LIGHT_TRAIL_LEFT = 0x55
+    LIGHT_DOOR_END_LEVEL = 0x56
+    DOOR_BOTTOM_LOCK_STUCK = 0x57
+    DRAW_BRIDGE_CHAIN = 0x58
+    WHALE = 0x59
+    WHALE_EYE = 0x5A
+    PHANTO = 0x5B
+    TREE_BACKGROUND_LEFT = 0x5C
+    TREE_BACKGROUND_MIDDLE_LEFT = 0x5D
+    TREE_BACKGROUND_RIGHT = 0x5E
+    TREE_BACKGROUND_MIDDLE_RIGHT = 0x5F
+    WHALE_TOP_LEFT = 0x60
+    WHALE_TOP = 0x61
+    WHALE_TOP_RIGHT = 0x62
+    WHALE_TAIL = 0x63
+    JUMP_THROUGH_MACHINE_BLOCK = 0x64
+    BRIDGE = 0x65
+    BRIDGE_SHADOW = 0x66
+    CONVEYOR_LEFT = 0x67
+    CONVEYOR_RIGHT = 0x68
+    MUSHROOM_BLOCK = 0x69
+    UNUSED_6A_MUSHROOM_BLOCK = 0x6A
+    UNUSED_6B_MUSHROOM_BLOCK = 0x6B
+    POW_BLOCK = 0x6C
+    UNUSED_6D = 0x6D
+    SOLID_BRICK_1 = 0x6E
+    JAR_TOP_POINTER = 0x6F
+    JAR_MIDDLE = 0x70
+    JAR_BOTTOM = 0x71
+    JAR_SMALL = 0x72
+    JAR_TOP_GENERIC = 0x73
+    JAR_TOP_NON_ENTERABLE = 0x74
+    LOG_LEFT = 0x75
+    LOG_MIDDLE = 0x76
+    LOG_RIGHT = 0x77
+    LOG_RIGHT_TREE = 0x78
+    LOG_PILLAR_TOP_1 = 0x79
+    LOG_PILLAR_MIDDLE_1 = 0x7A
+    UNUSED_7B = 0x7B
+    UNUSED_7C = 0x7C
+    UNUSED_7D = 0x7D
+    UNUSED_7E = 0x7E
+    UNUSED_7F = 0x7F
+    LADDER = 0x80
+    LADDER_SHADOW = 0x81
+    PALM_TREE_TRUNK = 0x82
+    DARK_DOOR = 0x83
+    PYRAMID_LEFT_ANGLE = 0x84
+    PYRAMID_LEFT = 0x85
+    PYRAMID_RIGHT = 0x86
+    PYRAMID_RIGHT_ANGLE = 0x87
+    STAR_BG_1 = 0x88
+    STAR_BG_2 = 0x89
+    QUICKSAND_SLOW = 0x8A
+    QUICKSAND_FAST = 0x8B
+    HORN_TOP_LEFT = 0x8C
+    HORN_TOP_RIGHT = 0x8D
+    HORN_BOTTOM_LEFT = 0x8E
+    HORN_BOTTOM_RIGHT = 0x8F
+    BACKGROUND_BRICK = 0x90
+    JUMPTHROUGH_SAND = 0x91
+    JUMPTHROUGH_WOOD_BLOCK = 0x92
+    DIGGABLE_SAND = 0x93
+    LADDER_STANDABLE = 0x94
+    LADDER_STANDABLE_SHADOW = 0x95
+    JUMPTHROUGH_SAND_BLOCK = 0x96
+    JUMPTHROUGH_BRICK = 0x97
+    TILE_98 = 0x98
+    SOLID_SAND = 0x99
+    TILE_9A = 0x9A
+    SOLID_BRICK_2 = 0x9B
+    GROUND_BRICK_2 = 0x9C
+    BOMBABLE_BRICK = 0x9D
+    JAR_WALL = 0x9E
+    ROCK_WALL_ANGLE = 0x9F
+    ROCK_WALL = 0xA0
+    ROCK_WALL_OFFSET = 0xA1
+    SOLID_ROUND_BRICK_2 = 0xA2
+    SOLID_BRICK_2_WALL = 0xA3
+    SOLID_WOOD = 0xA4
+    ROCK_WALL_EYE_LEFT = 0xA5
+    ROCK_WALL_EYE_RIGHT = 0xA6
+    ROCK_WALL_MOUTH = 0xA7
+    WINDOW_TOP = 0xA8
+    DOORWAY_TOP = 0xA9
+    COLUMN_PILLAR_TOP_2 = 0xAA
+    COLUMN_PILLAR_MIDDLE_2 = 0xAB
+    UNUSED_AC = 0xAC
+    UNUSED_AD = 0xAD
+    UNUSED_AE = 0xAE
+    UNUSED_AF = 0xAF
+    UNUSED_B0 = 0xB0
+    UNUSED_B1 = 0xB1
+    UNUSED_B2 = 0xB2
+    UNUSED_B3 = 0xB3
+    UNUSED_B4 = 0xB4
+    UNUSED_B5 = 0xB5
+    UNUSED_B6 = 0xB6
+    UNUSED_B7 = 0xB7
+    UNUSED_B8 = 0xB8
+    UNUSED_B9 = 0xB9
+    UNUSED_BA = 0xBA
+    UNUSED_BB = 0xBB
+    UNUSED_BC = 0xBC
+    UNUSED_BD = 0xBD
+    UNUSED_BE = 0xBE
+    UNUSED_BF = 0xBF
+    PALM_TREE_TOP = 0xC0
+    VINE_TOP = 0xC1
+    VINE = 0xC2
+    VINE_BOTTOM = 0xC3
+    CLIMBABLE_SKY = 0xC4
+    UNUSED_C5 = 0xC5
+    JAR_OUTSIDE_BACKGROUND = 0xC6
+    GREEN_PLATFORM_LEFT = 0xC7
+    GREEN_PLATFORM_MIDDLE = 0xC8
+    GREEN_PLATFORM_RIGHT = 0xC9
+    GREEN_PLATFORM_TOP_LEFT = 0xCA
+    MUSHROOM_TOP_LEFT = 0xCB
+    GREEN_PLATFORM_TOP = 0xCC
+    MUSHROOM_TOP_MIDDLE = 0xCD
+    GREEN_PLATFORM_TOP_RIGHT = 0xCE
+    MUSHROOM_TOP_RIGHT = 0xCF
+    GREEN_PLATFORM_TOP_LEFT_OVERLAP = 0xD0
+    GREEN_PLATFORM_TOP_RIGHT_OVERLAP = 0xD1
+    GREEN_PLATFORM_TOP_LEFT_OVERLAP_EDGE = 0xD2
+    GREEN_PLATFORM_TOP_RIGHT_OVERLAP_EDGE = 0xD3
+    VINE_STANDABLE = 0xD4
+    SOLID_GRASS = 0xD5
+    SOLID_BRICK_3 = 0xD6
+    GROUND_BRICK_3 = 0xD7
+    UNUSED_D8 = 0xD8
+    UNUSED_D9 = 0xD9
+    UNUSED_DA = 0xDA
+    UNUSED_DB = 0xDB
+    UNUSED_DC = 0xDC
+    UNUSED_DD = 0xDD
+    UNUSED_DE = 0xDE
+    UNUSED_DF = 0xDF
+    UNUSED_E0 = 0xE0
+    UNUSED_E1 = 0xE1
+    UNUSED_E2 = 0xE2
+    UNUSED_E3 = 0xE3
+    UNUSED_E4 = 0xE4
+    UNUSED_E5 = 0xE5
+    UNUSED_E6 = 0xE6
+    UNUSED_E7 = 0xE7
+    UNUSED_E8 = 0xE8
+    UNUSED_E9 = 0xE9
+    UNUSED_EA = 0xEA
+    UNUSED_EB = 0xEB
+    UNUSED_EC = 0xEC
+    UNUSED_ED = 0xED
+    UNUSED_EE = 0xEE
+    UNUSED_EF = 0xEF
+    UNUSED_F0 = 0xF0
+    UNUSED_F1 = 0xF1
+    UNUSED_F2 = 0xF2
+    UNUSED_F3 = 0xF3
+    UNUSED_F4 = 0xF4
+    UNUSED_F5 = 0xF5
+    UNUSED_F6 = 0xF6
+    UNUSED_F7 = 0xF7
+    UNUSED_F8 = 0xF8
+    UNUSED_F9 = 0xF9
+    UNUSED_FA = 0xFA
+    UNUSED_FB = 0xFB
+    UNUSED_FC = 0xFC
+    UNUSED_FD = 0xFD
+    UNUSED_FE = 0xFE
+    UNUSED_FF = 0xFF

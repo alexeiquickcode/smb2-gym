@@ -180,4 +180,34 @@ This project is for educational and research purposes only. Users must provide t
 
 ### Debugging
 
+The repository includes `play_collision_debug.py` for visualizing the collision map alongside gameplay.
+
+**Running the debug script:**
+```bash
+python play_collision_debug.py
+```
+
+**VS Code launch.json configuration:**
+```json
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Collision Debug",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/play_collision_debug.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        }
+    ]
+}
+```
+
+The debug view shows:
+- Left panel: Game screen
+- Right panel: Collision map with tile types color-coded
+- Player position indicated with red-outlined white circle
+- Legend showing tile type colors
+
 

@@ -24,24 +24,23 @@ from .app.info_display import create_info_panel
 from .app.rendering import render_frame
 from .constants import (
     GAME_INIT_FRAMES,
-    LIVES,
     MAX_SAVE_SLOTS,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
+    GlobalCoordinate,
 )
-from .game_state.character_stats import get_character_stats
-from .game_state.collision_map import CollisionMapMixin
-from .game_state.enemies import EnemiesMixin
-from .game_state.player_state import PlayerStateMixin
-from .game_state.position import PositionMixin
-from .game_state.timers import TimersMixin
+from .state.enemies import EnemiesMixin
+from .state.player import PlayerStateMixin
+from .state.position import PositionMixin
+from .state.semantic_map import SemanticMapMixin
+
+
 class SuperMarioBros2Env(
     gym.Env,
     PositionMixin,
     PlayerStateMixin,
-    TimersMixin,
     EnemiesMixin,
-    CollisionMapMixin,
+    SemanticMapMixin,
 ):
     """
     Gymnasium environment for Super Mario Bros 2 (Europe).
@@ -55,7 +54,7 @@ class SuperMarioBros2Env(
     """
 
     # Number of frames to wait during area transitions before accepting new coordinates
-    AREA_TRANSITION_FRAMES = 98
+    AREA_TRANSITION_FRAMES = 98  # TODO: Perhaps we can detect this when the sub-space door despawns?
 
     def __init__(
         self,
@@ -179,6 +178,7 @@ class SuperMarioBros2Env(
         self._previous_x_global = None  # Track x position for transition detection
         self._previous_y_global = None  # Track y position for transition detection
         self._transition_frame_count = 0  # Count frames since transition detected
+        self._last_obs = None  # Track last observation for rendering
 
     def _init_rendering(self) -> None:
         """Initialize pygame rendering when first needed."""
@@ -265,6 +265,7 @@ class SuperMarioBros2Env(
 
         # Get one frame after reset/loading save state
         obs, _, _, _, _ = self._nes.step([False] * 8, render=True)
+        self._last_obs = obs
 
         info = self.info
 
@@ -278,7 +279,7 @@ class SuperMarioBros2Env(
         self._previous_x_global = global_coords.global_x
         self._previous_y_global = global_coords.global_y
         if self.render_mode == 'human':
-            self.render(obs)
+            self.render()
 
         return np.array(obs), info
 
@@ -304,6 +305,7 @@ class SuperMarioBros2Env(
         # 1. Step emulator
         obs, _, _, _, nes_info = self._nes.step(buttons.tolist(), render=True)
         self._episode_steps += 1
+        self._last_obs = obs
 
         # 2. Get game state
         info = self.info
@@ -315,7 +317,6 @@ class SuperMarioBros2Env(
             info['life_lost'] = True
 
         # Update tracking for next step
-        level_completed = self.level_completed
         self._previous_lives = self.lives
         self._previous_levels_finished = self.levels_finished.copy()
 
@@ -326,7 +327,7 @@ class SuperMarioBros2Env(
         self._previous_y_global = global_coords.global_y
 
         # 4. Check termination
-        terminated = self.is_game_over or life_lost  # or level_completed
+        terminated = self.game.is_game_over or life_lost or self.level_completed
         truncated = (
             self.max_episode_steps is not None and self._episode_steps >= self.max_episode_steps
         )
@@ -336,34 +337,30 @@ class SuperMarioBros2Env(
 
         # Render if in human mode
         if self.render_mode == 'human':
-            self.render(obs)
+            self.render()
 
         return np.array(obs), reward, terminated, truncated, info
 
-    def render(self, obs: np.ndarray) -> Optional[np.ndarray]:
+    def render(self) -> Optional[np.ndarray]:
         """Render the environment.
-
-        Args:
-            obs: Observation array to render.
 
         Returns:
             RGB array for display, None if no render mode
         """
         if self.render_mode == 'human':
-            # Lazy load
-            if not self._pygame_initialized:
+            if not self._pygame_initialized:  # Lazy load
                 self._init_rendering()
 
-            if self._screen is not None:
+            if self._screen is not None and self._last_obs is not None:
                 import pygame
 
                 # Handle pygame events to prevent window freezing
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
-                        return obs
+                        return self._last_obs
 
                 # Render
-                render_frame(self._screen, obs, self._width, self._height)
+                render_frame(self._screen, self._last_obs, self._width, self._height)
                 create_info_panel(self._screen, self.info, self._font, self._height, self._width)
 
                 pygame.display.flip()
@@ -371,7 +368,7 @@ class SuperMarioBros2Env(
                 if self._clock is not None and self.render_fps is not None:
                     self._clock.tick(self.render_fps)
 
-            return obs
+            return self._last_obs
         return None
 
     def _get_y_position(self, address: int) -> int:
@@ -417,87 +414,268 @@ class SuperMarioBros2Env(
     # ---- Properties ------------------------------------------------
 
     @property
+    def pos(self):
+        """Position and coordinate properties from PositionMixin.
+
+        Provides access to:
+            - x_global, x_local, x_page
+            - y_global, y_local, y_page
+            - area, sub_area, spawn_page
+            - current_page, total_pages
+            - is_vertical, global_coords
+        """
+
+        class PositionAccessor:
+
+            def __init__(self, env):
+                self._env = env
+
+            @property
+            def x_global(self) -> int:
+                return self._env.x_position_global
+
+            @property
+            def x_local(self) -> int:
+                return self._env.x_position
+
+            @property
+            def x_page(self) -> int:
+                return self._env.x_page
+
+            @property
+            def y_global(self) -> int:
+                return self._env.y_position_global
+
+            @property
+            def y_local(self) -> int:
+                return self._env.y_position
+
+            @property
+            def y_page(self) -> int:
+                return self._env.y_page
+
+            @property
+            def area(self) -> int:
+                return self._env.area
+
+            @property
+            def sub_area(self) -> int:
+                return self._env.sub_area
+
+            @property
+            def spawn_page(self) -> int:
+                return self._env.spawn_page
+
+            @property
+            def current_page(self) -> int:
+                return self._env.current_page_position
+
+            @property
+            def total_pages(self) -> int:
+                return self._env.total_pages_in_sub_area
+
+            @property
+            def is_vertical(self) -> bool:
+                return self._env.is_vertical_area
+
+            @property
+            def global_coords(self) -> GlobalCoordinate:
+                return self._env.global_coordinate_system
+
+        return PositionAccessor(self)
+
+    @property
+    def game(self):
+        """World and level state properties from PositionMixin.
+
+        Provides access to:
+            - world: World number (1-based)
+            - level: Level string (e.g., '1-1', '7-2')
+            - is_game_over: True if game over (lives = 0)
+        """
+
+        class GameAccessor:
+
+            def __init__(self, env):
+                self._env = env
+
+            @property
+            def world(self) -> int:
+                return self._env.world
+
+            @property
+            def level(self) -> str:
+                return self._env.level
+
+            @property
+            def is_game_over(self) -> bool:
+                if self._env._episode_steps < GAME_INIT_FRAMES:
+                    return False
+                return self._env.lives == 0
+
+        return GameAccessor(self)
+
+    @property
+    def pc(self):
+        """Player character state properties from PlayerStateMixin.
+
+        Provides access to:
+            - lives, character, hearts
+            - cherries, coins, continues
+            - holding_item, item_pulled, big_vegetables_pulled
+            - speed, on_vine
+            - starman_timer, subspace_timer, stopwatch_timer
+            - invulnerability_timer, framerule_timer, pidget_carpet_timer
+            - float_timer, door_transition_timer
+            - state, levels_finished, level_completed
+            - subspace_status, level_transition
+            - stats
+        """
+
+        class PlayerCharacterAccessor:
+
+            def __init__(self, env):
+                self._env = env
+
+            @property
+            def lives(self) -> int:
+                return self._env.lives
+
+            @property
+            def character(self) -> int:
+                return self._env.character
+
+            @property
+            def hearts(self) -> int:
+                return self._env.hearts
+
+            @property
+            def cherries(self) -> int:
+                return self._env.cherries
+
+            @property
+            def coins(self) -> int:
+                return self._env.coins
+
+            @property
+            def continues(self) -> int:
+                return self._env.continues
+
+            @property
+            def holding_item(self) -> bool:
+                return self._env.holding_item
+
+            @property
+            def item_pulled(self) -> int:
+                return self._env.item_pulled
+
+            @property
+            def big_vegetables_pulled(self) -> int:
+                return self._env.big_vegetables_pulled
+
+            @property
+            def speed(self) -> int:
+                return self._env.player_speed
+
+            @property
+            def on_vine(self) -> bool:
+                return self._env.on_vine
+
+            @property
+            def starman_timer(self) -> int:
+                return self._env.starman_timer
+
+            @property
+            def subspace_timer(self) -> int:
+                return self._env.subspace_timer
+
+            @property
+            def stopwatch_timer(self) -> int:
+                return self._env.stopwatch_timer
+
+            @property
+            def invulnerability_timer(self) -> int:
+                return self._env.invulnerability_timer
+
+            @property
+            def framerule_timer(self) -> int:
+                return self._env.framerule_timer
+
+            @property
+            def pidget_carpet_timer(self) -> int:
+                return self._env.pidget_carpet_timer
+
+            @property
+            def float_timer(self) -> int:
+                return self._env.float_timer
+
+            @property
+            def door_transition_timer(self) -> int:
+                return self._env.door_transition_timer
+
+            @property
+            def state(self) -> int:
+                return self._env.player_state
+
+            @property
+            def levels_finished(self) -> dict[str, int]:
+                return self._env.levels_finished
+
+            @property
+            def level_completed(self) -> bool:
+                return self._env.level_completed
+
+            @property
+            def subspace_status(self) -> int:
+                return self._env.subspace_status
+
+            @property
+            def level_transition(self) -> int:
+                return self._env.level_transition
+
+            @property
+            def stats(self):
+                return self._env.character_stats
+
+        return PlayerCharacterAccessor(self)
+
+    @property
+    def enemies(self):
+        """Enemy tracking from EnemiesMixin.
+
+        Returns:
+            List of Enemy objects with position and state data
+        """
+        # Access enemies property from the mixin via super()
+        # Since SuperMarioBros2Env inherits from EnemiesMixin, we can call the parent property
+        return super().enemies
+
+    @property
+    def semantic(self):
+        """Semantic tile map from SemanticMapMixin.
+
+        Returns structured numpy array (15 x 16) with fields:
+            - tile_id: Raw BackgroundTile ID
+            - fine_type: Fine-grained FineTileType (SOLID, ENEMY, etc.)
+            - coarse_type: Coarse-grained CoarseTileType (TERRAIN, ENEMY, etc.)
+            - color_r, color_g, color_b: RGB visualization color
+        """
+        return self.semantic_map
+
+    @property
     def info(self) -> dict[str, Any]:
         """Get current game info from RAM.
 
         Returns:
-            dict with game state information
+            dict with organized game state using accessor objects
         """
         return {
-            'life': self.lives,
-            'x_pos_global': self.x_position_global,
-            'y_pos_global': self.y_position_global,
-            'x_pos_local': self.x_position,
-            'y_pos_local': self.y_position,
-            'x_page': self.x_page,
-            'y_page': self.y_page,
-            'world': self.world,
-            'level': self.level,
-            'area': self.area,
-            'sub_area': self.sub_area,
-            'spawn_page': self.spawn_page,
-            'current_page_position': self.current_page_position,
-            'total_pages_in_sub_area': self.total_pages_in_sub_area,
-            'is_vertical_area': self.is_vertical_area,
-            'global_coordinates': self.global_coordinate_system,
-            'character': self.character,
-            'hearts': self.hearts,
-            'cherries': self.cherries,
-            'coins': self.coins,
-            'starman_timer': self.starman_timer,
-            'subspace_timer': self.subspace_timer,
-            'stopwatch_timer': self.stopwatch_timer,
-            'invulnerability_timer': self.invulnerability_timer,
-            'framerule_timer': self.framerule_timer,
-            'unknown_timer': self.unknown_timer,
-            'bob_omb_5_timer': self.bob_omb_5_timer,
-            'bob_omb_4_timer': self.bob_omb_4_timer,
-            'bob_omb_3_timer': self.bob_omb_3_timer,
-            'bob_omb_2_timer': self.bob_omb_2_timer,
-            'bob_omb_1_timer': self.bob_omb_1_timer,
-            'bomb_1_timer': self.bomb_1_timer,
-            'bomb_2_timer': self.bomb_2_timer,
-            'pidget_carpet_timer': self.pidget_carpet_timer,
-            'holding_item': self.holding_item,
-            'item_pulled': self.item_pulled,
-            'continues': self.continues,
-            'player_speed': self.player_speed,
-            'on_vine': self.on_vine,
-            'float_timer': self.float_timer,
-            'levels_finished': self.levels_finished,
-            'vegetables_pulled': self.vegetables_pulled,
-            'subspace_status': self.subspace_status,
-            'level_transition': self.level_transition,
-            'level_completed': self.level_completed,
-            'door_transition_timer': self.door_transition_timer,
-            'enemies_defeated': self.enemies_defeated,
-            'enemy_x_positions': self.enemy_x_positions,
-            'enemy_y_positions': self.enemy_y_positions,
-            'enemy_speeds': self.enemy_speeds,
-            'enemy_visibility_states': self.enemy_visibility_states,
-            'enemy_x_positions_global': self.enemy_x_positions_global,
-            'enemy_y_positions_global': self.enemy_y_positions_global,
-            'enemy_x_pages': self.enemy_x_pages,
-            'enemy_y_pages': self.enemy_y_pages,
-            'enemy_x_positions_relative': self.enemy_x_positions_relative,
-            'enemy_y_positions_relative': self.enemy_y_positions_relative,
-            'enemy_hp': self.enemy_hp,
-            'character_stats': self.character_stats,
-            'player_state': self.player_state,
-            'collision_map': self.collision_map,
-            'interaction_matrix': self.interaction_matrix,
-            'can_climb': self.can_climb,
-            'is_on_special_surface': self.is_on_special_surface,
+            'pc': self.pc,
+            'pos': self.pos,
+            'game': self.game,
+            'enemies': self.enemies,
+            'semantic': self.semantic,
         }
-
-    @property
-    def is_game_over(self) -> bool:
-        """Check if game is over (lives = 0)."""
-        if self._episode_steps < GAME_INIT_FRAMES:  # Give the game 5 seconds to fully initialize
-            return False
-
-        lives = self.lives
-        return lives == 0
 
     def _detect_life_loss(self) -> bool:
         """Detect if Mario lost a life this step.
@@ -517,11 +695,6 @@ class SuperMarioBros2Env(
 
         current_lives = self.lives
         return current_lives < self._previous_lives
-
-    @property
-    def character_stats(self):
-        """Get current character's statistics and abilities."""
-        return get_character_stats(self.character)
 
     # ---- Validators ------------------------------------------------
 
