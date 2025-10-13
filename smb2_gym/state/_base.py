@@ -1,6 +1,10 @@
 """Base class for game state mixins."""
 
-from abc import ABC, abstractmethod
+from abc import (
+    ABC,
+    abstractmethod,
+)
+from typing import Optional
 
 
 class GameStateMixin(ABC):
@@ -51,8 +55,9 @@ class GameStateMixin(ABC):
     # Attributes that mixins expect to exist
     # These are typically set in _init_state_tracking() in the main class
     AREA_TRANSITION_FRAMES: int
-    _previous_sub_area: int | None
-    _previous_x_global: int | None
-    _previous_y_global: int | None
+    _previous_sub_area: Optional[int]
+    _previous_x_global: Optional[int]
+    _previous_y_global: Optional[int]
     _transition_frame_count: int
-    _previous_levels_finished: dict[str, int] | None
+    _previous_levels_finished: Optional[dict[str, int]]
+

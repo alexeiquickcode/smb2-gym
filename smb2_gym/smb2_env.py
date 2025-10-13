@@ -36,7 +36,7 @@ from .state.semantic_map import SemanticMapMixin
 
 
 class SuperMarioBros2Env(
-    gym.Env,
+    gym.Env[np.ndarray, np.int64],
     PositionMixin,
     PlayerStateMixin,
     EnemiesMixin,
@@ -54,7 +54,7 @@ class SuperMarioBros2Env(
     """
 
     # Number of frames to wait during area transitions before accepting new coordinates
-    AREA_TRANSITION_FRAMES = 98  # TODO: Perhaps we can detect this when the sub-space door despawns?
+    AREA_TRANSITION_FRAMES: int = 98  # TODO: Perhaps we can detect this when the sub-space door despawns?
 
     def __init__(
         self,
@@ -82,12 +82,12 @@ class SuperMarioBros2Env(
         """
         super().__init__()
 
-        self.render_mode = render_mode
-        self.max_episode_steps = max_episode_steps
-        self.reset_on_life_loss = reset_on_life_loss
-        self.init_config = init_config
-        self.render_fps = render_fps
-        self.env_name = env_name
+        self.render_mode: Optional[str] = render_mode
+        self.max_episode_steps: Optional[int] = max_episode_steps
+        self.reset_on_life_loss: bool = reset_on_life_loss
+        self.init_config: InitConfig = init_config
+        self.render_fps: Optional[int] = render_fps
+        self.env_name: Optional[str] = env_name
         if self.env_name:
             print(f'Creating {self.env_name} environment...')
 
@@ -97,9 +97,13 @@ class SuperMarioBros2Env(
             raise ValueError(
                 f"Invalid frame_method '{frame_method}'. Must be one of {valid_frame_methods}"
             )
-        self.frame_method = frame_method
+        self.frame_method: str = frame_method
 
         # Store relevant attributes (only meaningful for built-in ROM mode)
+        self.starting_level: Optional[str]
+        self.starting_level_id: Optional[int]
+        self.starting_character: Optional[int]
+
         if not self.init_config.rom_path:  # Built-in ROM mode
             self.starting_level = self.init_config.level
             self.starting_level_id = self.init_config.level_id
@@ -114,16 +118,16 @@ class SuperMarioBros2Env(
             raise ValueError(
                 f"Invalid action_type '{action_type}'. Must be 'all', 'complex', or 'simple'"
             )
-        self.action_type = action_type
+        self.action_type: ActionType = action_type
 
         self._init_emulator()
         self._init_spaces()
         self._init_state_tracking()
 
         # Initialize rendering attributes but defer pygame init until needed
-        self._screen = None
-        self._clock = None
-        self._pygame_initialized = False
+        self._screen: Any = None  # pygame.Surface | None - avoid importing pygame
+        self._clock: Any = None  # pygame.time.Clock | None - avoid importing pygame
+        self._pygame_initialized: bool = False
 
     def _init_emulator(self) -> None:
         """Initialize the NES emulator and load ROM."""
@@ -132,7 +136,7 @@ class SuperMarioBros2Env(
             raise FileNotFoundError(f"ROM file not found: {rom_path}")
 
         # Initialize TetaNES with frame rendering method
-        self._nes = NesEnv(headless=False, frame_method=self.frame_method)
+        self._nes: NesEnv = NesEnv(headless=False, frame_method=self.frame_method)
 
         # Load ROM
         with open(rom_path, 'rb') as f:
@@ -171,14 +175,15 @@ class SuperMarioBros2Env(
 
     def _init_state_tracking(self) -> None:
         """Initialize state tracking variables."""
-        self._done = False
-        self._episode_steps = 0
-        self._previous_lives = None  # Track lives to detect life loss
-        self._previous_sub_area = None  # Track sub-area for transition detection
-        self._previous_x_global = None  # Track x position for transition detection
-        self._previous_y_global = None  # Track y position for transition detection
-        self._transition_frame_count = 0  # Count frames since transition detected
-        self._last_obs = None  # Track last observation for rendering
+        self._done: bool = False
+        self._episode_steps: int = 0
+        self._previous_lives: Optional[int] = None  # Track lives to detect life loss
+        self._previous_levels_finished: Optional[dict[str, int]] = {}  # Track level completion
+        self._previous_sub_area: Optional[int] = None  # Track sub-area for transition detection
+        self._previous_x_global: Optional[int] = None  # Track x position for transition detection
+        self._previous_y_global: Optional[int] = None  # Track y position for transition detection
+        self._transition_frame_count: int = 0  # Count frames since transition detected
+        self._last_obs: Optional[np.ndarray] = None  # Track last observation for rendering
 
     def _init_rendering(self) -> None:
         """Initialize pygame rendering when first needed."""
@@ -197,18 +202,18 @@ class SuperMarioBros2Env(
             SCREEN_WIDTH,
         )
 
-        self._scale = DEFAULT_SCALE
-        self._width = SCREEN_WIDTH * self._scale
-        self._height = SCREEN_HEIGHT * self._scale
-        self._info_height = get_required_info_height(self._scale)
+        self._scale: int = DEFAULT_SCALE
+        self._width: int = SCREEN_WIDTH * self._scale
+        self._height: int = SCREEN_HEIGHT * self._scale
+        self._info_height: int = get_required_info_height(self._scale)
 
         self._screen = pygame.display.set_mode((self._width, self._height + self._info_height))
         pygame.display.set_caption("Super Mario Bros 2")
         self._clock = pygame.time.Clock() if self.render_fps is not None else None
 
         # Setup font for info display
-        self._font_size = FONT_SIZE_BASE * self._scale // 2
-        self._font = pygame.font.Font(None, self._font_size)
+        self._font_size: int = FONT_SIZE_BASE * self._scale // 2
+        self._font: Any = pygame.font.Font(None, self._font_size)  # pygame.font.Font
         self._pygame_initialized = True
 
     # ---- Primary Gym methods ---------------------------------------
@@ -283,7 +288,7 @@ class SuperMarioBros2Env(
 
         return np.array(obs), info
 
-    def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
+    def step(self, action: np.int64) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         """Step the environment.
 
         Args:
@@ -640,17 +645,6 @@ class SuperMarioBros2Env(
         return PlayerCharacterAccessor(self)
 
     @property
-    def enemies(self):
-        """Enemy tracking from EnemiesMixin.
-
-        Returns:
-            List of Enemy objects with position and state data
-        """
-        # Access enemies property from the mixin via super()
-        # Since SuperMarioBros2Env inherits from EnemiesMixin, we can call the parent property
-        return super().enemies
-
-    @property
     def semantic(self):
         """Semantic tile map from SemanticMapMixin.
 
@@ -698,7 +692,7 @@ class SuperMarioBros2Env(
 
     # ---- Validators ------------------------------------------------
 
-    def _validate_and_convert_action(self, action: int) -> np.ndarray:
+    def _validate_and_convert_action(self, action: np.int64) -> np.ndarray:
         """Validate and convert action to button array based on action type.
 
         Args:
@@ -713,7 +707,7 @@ class SuperMarioBros2Env(
         if self.action_type == "all":
             if not 0 <= action <= 255:
                 raise ValueError(f"Invalid action {action}. Must be 0-255 for 'all' action type")
-            return action_to_buttons(action)
+            return action_to_buttons(int(action))
         elif self.action_type == "complex":
             if action >= len(COMPLEX_ACTIONS):
                 raise ValueError(f"Invalid action {action}. Must be 0-{len(COMPLEX_ACTIONS)-1}")

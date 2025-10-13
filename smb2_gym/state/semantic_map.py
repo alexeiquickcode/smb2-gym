@@ -38,10 +38,12 @@ class SemanticMapMixin(GameStateMixin):
     - Tile categories (TERRAIN, HAZARD, etc.)
     - Player position on the tile grid
     - Enemy positions overlaid on the map
+
+    Note: This mixin depends on the `enemies` property being provided by EnemiesMixin.
     """
 
     _nes: NesEnv  # Parent class for type checking
-    enemies: list[Enemy]
+    enemies: list[Enemy]  # Provided by EnemiesMixin for type checking
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -56,7 +58,6 @@ class SemanticMapMixin(GameStateMixin):
         """
         oam_data: list[tuple[int, int, int, int]] = []
 
-        # Player sprites are at fixed indices 8-11 (4 sprites for big character, subset for small)
         for sprite_index in range(8, 12):
             sprite_data = self._nes.read_oam_sprite(sprite_index)
             if sprite_data is None:
@@ -77,14 +78,10 @@ class SemanticMapMixin(GameStateMixin):
         Returns:
             tuple of (x_pixel, y_pixel) on screen, or None if not found
         """
-        # Read player sprite data (fixed indices 7-10)
         oam_sprites = self._read_player_sprites()
-
         if not oam_sprites:
             return None
 
-        # Get the top-left position from all player sprites
-        # (minimum X and Y coordinates)
         min_x = min(sprite[3] for sprite in oam_sprites)  # x_pos is index 3
         min_y = min(sprite[0] for sprite in oam_sprites)  # y_pos is index 0
 
@@ -92,7 +89,7 @@ class SemanticMapMixin(GameStateMixin):
 
     # ---- Player State ----------------------------------------------
 
-    def is_player_ducking(self) -> bool:  # TODO: This doesn't change the hitbox??
+    def is_player_ducking(self) -> bool:  # TODO: This doesn't change the hitbox?? Need to review
         """Check if the player is currently ducking/crouching.
 
         Returns:
@@ -111,6 +108,7 @@ class SemanticMapMixin(GameStateMixin):
             sprite_data = self._nes.read_oam_sprite(sprite_index)
             if sprite_data is not None:
                 _y_pos, tile_id, _attributes, _x_pos = sprite_data
+
                 # Check if this is the ducking tile ($FB)
                 if tile_id == 0xFB:
                     return True
@@ -124,9 +122,8 @@ class SemanticMapMixin(GameStateMixin):
             List of (screen_x_tile, screen_y_tile) tuples representing tiles occupied by player.
             Returns empty list if player position not found.
         """
-        # Read player sprites to get actual sprite bounds
+        # Get sprites
         oam_sprites = self._read_player_sprites()
-
         if not oam_sprites:
             return []
 
