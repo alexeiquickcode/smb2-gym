@@ -16,10 +16,11 @@ SIMPLE_ACTIONS = [
     ['A'],  # Jump
     ['B'],  # Pick up/throw
     ['right', 'A'],  # Jump right
-    ['left', 'A'],  # Jump left  
+    ['left', 'A'],  # Jump left
     ['right', 'B'],  # Pick up right
     ['left', 'B'],  # Pick up left
     ['down'],  # Crouch/charge super jump (hold 77+ frames then press A)
+    ['down', 'A'],  # Super jump (if charged)
 ]
 
 COMPLEX_ACTIONS = [
@@ -34,6 +35,7 @@ COMPLEX_ACTIONS = [
     ['left', 'A', 'B'],  # Jump throw left
     ['down'],  # Charge super jump (hold 77+ frames then press A)
     ['down', 'B'],  # Pick up from ground
+    ['down', 'A'],  # Super jump (if charged)
     ['up'],  # Enter door
     ['A'],  # Jump
     ['B'],  # Pick up/throw

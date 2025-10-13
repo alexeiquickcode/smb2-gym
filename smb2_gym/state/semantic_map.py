@@ -129,15 +129,16 @@ class SemanticMapMixin(GameStateMixin):
 
         # Get sprite bounds
         min_x = min(sprite[3] for sprite in oam_sprites)
-        _max_x = max(sprite[3] for sprite in oam_sprites)
+        max_x = max(sprite[3] for sprite in oam_sprites)
         min_y = min(sprite[0] for sprite in oam_sprites)
         max_y = max(sprite[0] for sprite in oam_sprites)
 
         # Calculate which tiles are occupied
         tiles: list[tuple[int, int]] = []
 
-        # Get X tile (same for all cases)
-        x_tile = min_x // TILE_SIZE
+        # Get X tile using center of sprite (add half tile width for centering)
+        center_x = (min_x + max_x) // 2
+        x_tile = (center_x + TILE_SIZE // 2) // TILE_SIZE
 
         # Check if player has 2+ hearts (is big)
         life_meter = self._read_ram_safe(PLAYER.LIFE_METER, default=0x0F)
@@ -240,39 +241,60 @@ class SemanticMapMixin(GameStateMixin):
     # ---- Viewport --------------------------------------------------
 
     def _get_viewport_offset(self) -> tuple[int, int]:
-        """Get viewport offset by calculating from player's world position and screen position.
+        """Get viewport offset from screen boundary registers and PPU scroll.
+
+        The game stores the camera/viewport position using:
+        - ScreenBoundaryLeftHi/Lo: Page-aligned horizontal boundary
+        - ScreenYHi/Lo: Vertical position in world coordinates
+        - PPU scroll registers: Fine scrolling offsets within the current nametable
+
+        For horizontal scrolling, we need to add the PPU scroll offset to get
+        smooth sub-page scrolling. For vertical scrolling, ScreenYHi/Lo already
+        includes the fine offset.
 
         Returns:
             tuple of (viewport_x_offset, viewport_y_offset) in tiles
         """
-        # Get player's world position from RAM (in pixels)
-        player_x_page = self._read_ram_safe(PLAYER.X_PAGE, default=0)
-        player_x_position = self._read_ram_safe(PLAYER.X_POSITION, default=0)
-        player_y_page = self._read_ram_safe(PLAYER.Y_PAGE, default=0)
-        player_y_position = self._read_ram_safe(PLAYER.Y_POSITION, default=0)
+        # Screen boundary addresses from SMB2 disassembly
+        # https://github.com/Xkeeper0/smb2/blob/master/src/ram.asm
+        SCREEN_BOUNDARY_LEFT_HI = 0x04BE  # High byte of left screen boundary (page)
+        SCREEN_BOUNDARY_LEFT_LO = 0x04BF  # Low byte of left screen boundary (offset)
+        SCREEN_Y_HI = 0x00CA  # High byte of vertical screen position
+        SCREEN_Y_LO = 0x00CB  # Low byte of vertical screen position
+        PPU_SCROLL_X_MIRROR = 0x00FD  # Horizontal scroll position (within nametable)
+        PPU_SCROLL_Y_MIRROR = 0x00FC  # Vertical scroll position (within nametable)
 
-        # Calculate player's world position in pixels
-        player_world_x_pixels = (player_x_page * 256) + player_x_position
-        player_world_y_pixels = (player_y_page * 256) + player_y_position
+        # Read the camera base position
+        viewport_x_hi = self._read_ram_safe(SCREEN_BOUNDARY_LEFT_HI, default=0)
+        viewport_x_lo = self._read_ram_safe(SCREEN_BOUNDARY_LEFT_LO, default=0)
+        viewport_y_hi = self._read_ram_safe(SCREEN_Y_HI, default=0)
+        viewport_y_lo = self._read_ram_safe(SCREEN_Y_LO, default=0)
 
-        # Get player's screen position in pixels from sprite
-        sprite_pos = self.get_player_sprite_position()
+        # Read PPU scroll positions for fine scrolling
+        scroll_x = self._read_ram_safe(PPU_SCROLL_X_MIRROR, default=0)
+        scroll_y = self._read_ram_safe(PPU_SCROLL_Y_MIRROR, default=0)
 
-        if sprite_pos is None:
-            # FALLBACK: assume player is centered on screen
-            player_screen_x_pixels = 128
-            player_screen_y_pixels = 120
+        # Check scroll direction to determine scrolling type
+        scroll_direction = self._read_ram_safe(GAME_STATE.SCROLL_DIRECTION, default=0)
+
+        # Combine boundary and scroll positions
+        # For horizontal scrolling levels (scroll_direction != 0x00):
+        #   - ScreenBoundaryLeft tracks the base page
+        #   - PPU scroll gives fine offset within the page
+        # For vertical scrolling levels (scroll_direction == 0x00):
+        #   - ScreenY already includes fine positioning
+        if scroll_direction == 0x00:
+            # Vertical scrolling: ScreenY is complete, but may need PPU scroll for smoothness
+            viewport_x_pixels = (viewport_x_hi * PAGE_SIZE) + viewport_x_lo
+            viewport_y_pixels = (viewport_y_hi * PAGE_SIZE) + viewport_y_lo
         else:
-            player_screen_x_pixels, player_screen_y_pixels = sprite_pos
+            # Horizontal scrolling: add PPU scroll offset for smooth scrolling
+            viewport_x_pixels = (viewport_x_hi * PAGE_SIZE) + viewport_x_lo + scroll_x
+            viewport_y_pixels = (viewport_y_hi * PAGE_SIZE) + viewport_y_lo
 
-        # Calculate viewport offset in pixels: world_pos - screen_pos = viewport_offset
-        # Add 8 pixel offset to align sprite center with tile grid
-        viewport_x_pixels = player_world_x_pixels - player_screen_x_pixels + 8
-        viewport_y_pixels = player_world_y_pixels - player_screen_y_pixels + 16
-
-        # Convert to tiles and shift viewport down by 1 tile
-        viewport_x = max(0, viewport_x_pixels // TILE_SIZE)
-        viewport_y = max(0, (viewport_y_pixels // TILE_SIZE) - 1)
+        # Convert to tiles
+        viewport_x = viewport_x_pixels // TILE_SIZE
+        viewport_y = viewport_y_pixels // TILE_SIZE
 
         return viewport_x, viewport_y
 
@@ -281,6 +303,9 @@ class SemanticMapMixin(GameStateMixin):
     def _read_tile_maps(self) -> tuple[NDArray[np.uint8], NDArray[np.uint8]]:
         """Read tile IDs and types from SRAM.
 
+        In normal gameplay, reads from standard SRAM level data (0x0000-0x095F).
+        In subspace, reads from dedicated subspace SRAM region (0x0F00-0x0FE0).
+
         Returns:
             tuple of (tile_id_map, tile_type_map) - both 15x16 uint8 arrays
         """
@@ -288,6 +313,35 @@ class SemanticMapMixin(GameStateMixin):
         tile_id_map = np.zeros((SCREEN_TILES_HEIGHT, SCREEN_TILES_WIDTH), dtype=np.uint8)
         tile_type_map = np.zeros((SCREEN_TILES_HEIGHT, SCREEN_TILES_WIDTH), dtype=np.uint8)
 
+        # Check if in subspace (subspace_status == 2 means in subspace)
+        subspace_status = self._read_ram_safe(GAME_STATE.SUBSPACE_STATUS, default=0)
+        in_subspace = (subspace_status == 2)
+
+        if in_subspace:
+            # Subspace: read from dedicated subspace RAM region
+            # 0x0700 - 0x07FF (256 bytes) contains the subspace tile layout
+            # When entering subspace, the current screen is stored here (possibly reversed)
+            SUBSPACE_RAM_START = 0x0700
+            for y in range(SCREEN_TILES_HEIGHT):
+                for x in range(SCREEN_TILES_WIDTH):
+                    ram_address = SUBSPACE_RAM_START + (y * SCREEN_TILES_WIDTH + x)
+                    tile_id = self._read_ram_safe(ram_address, default=0)
+                    tile_id_map[y, x] = tile_id
+
+                    # Map tile ID to type
+                    if tile_id not in TILE_ID_MAPPING:
+                        warnings.warn(
+                            f"Unknown tile ID {tile_id} at subspace position ({x}, {y}), "
+                            f"RAM address 0x{ram_address:04X}. Treating as EMPTY tile.",
+                            RuntimeWarning,
+                            stacklevel=3
+                        )
+                        tile_type_map[y, x] = FineTileType.EMPTY
+                    else:
+                        tile_type_map[y, x] = TILE_ID_MAPPING[tile_id]
+            return tile_id_map, tile_type_map
+
+        # Normal gameplay: read from standard SRAM
         # Get viewport offset
         viewport_x, viewport_y = self._get_viewport_offset()
 

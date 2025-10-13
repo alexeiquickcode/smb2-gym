@@ -230,7 +230,7 @@ def play_human(
             action = 0  # Default to NOOP
 
             # Map button combinations to simple actions
-            if buttons[5] and buttons[0]:  # DOWN + A (super jump)
+            if buttons[5] and buttons[0]:  # DOWN + A (super jump if charged)
                 action = 11
             elif buttons[6] and buttons[0]:  # LEFT + A
                 action = 7
