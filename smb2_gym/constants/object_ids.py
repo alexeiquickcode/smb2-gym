@@ -1,4 +1,4 @@
-"""Background tile and object IDs from SMB2."""
+"""All object IDs and categorical state information."""
 
 from enum import (
     IntEnum,
@@ -9,10 +9,7 @@ from enum import (
 class CollisionFlags(IntFlag):
     """Collision flags bitfield from SMB2.
 
-    Used in EnemyCollision ($005B-$0063) and PlayerCollision ($005A).
     Tracks runtime collision detection results (what type of collision occurred).
-
-    Reference: https://github.com/Xkeeper0/smb2
     """
     NONE = 0x00
     RIGHT = 0x01
@@ -31,7 +28,6 @@ class SpriteFlags(IntFlag):
     Used in SpriteFlags46E ($046E-$0475, one byte per enemy slot).
     Defines inherent sprite/enemy properties set at spawn time.
 
-    Reference: https://github.com/Xkeeper0/smb2/blob/master/src/defs.asm
     """
     NONE = 0x00
     DAMAGE_FROM_ABOVE = 0x01  # Causes damage when touched from above

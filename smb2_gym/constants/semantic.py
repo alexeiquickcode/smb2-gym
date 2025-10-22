@@ -1,6 +1,6 @@
 """Semantic tile definitions for SMB2 environment.
 
-This module contains all semantic tile types, categories, colors, and mappings
+This module contains all semantic tile types, categories, colours, and mappings
 used for the semantic map observation space.
 """
 
@@ -69,7 +69,7 @@ class FineTileType(IntEnum):
     CONVEYOR_RIGHT = 19
 
 
-# RGB colors for tile types
+# RGB colours for tile types
 TILE_COLORS: dict[FineTileType, tuple[int, int, int]] = {
 
     # EMPTY
@@ -84,13 +84,13 @@ TILE_COLORS: dict[FineTileType, tuple[int, int, int]] = {
     FineTileType.DOOR: (255, 215, 0),  # gold
     FineTileType.JAR: (255, 215, 0),  # gold
 
-    # PICKABLE - distinct colors for each type
+    # PICKABLE - distinct colours for each type
     FineTileType.VEGETABLE: (50, 205, 50),  # lime green
     FineTileType.BOMB: (128, 0, 0),  # maroon
     FineTileType.POW_BLOCK: (255, 255, 224),  # light yellow
     FineTileType.KEY: (255, 215, 0),  # gold
 
-    # COLLECTIBLE - bright colors
+    # COLLECTIBLE - bright colours
     FineTileType.CHERRY: (255, 20, 147),  # deep pink
     FineTileType.POTION: (186, 85, 211),  # medium orchid
     FineTileType.MUSHROOM: (255, 140, 0),  # dark orange
@@ -121,7 +121,7 @@ SEMANTIC_TILE_DTYPE = np.dtype(
         ('tile_id', np.uint8),  # Raw game object ID (BackgroundTile/EnemyId value)
         ('fine_type', np.uint8),  # Fine-grained FineTileType (SOLID, ENEMY, etc.)
         ('coarse_type', np.uint8),  # Coarse-grained CoarseTileType (TERRAIN, ENEMY, etc.)
-        ('color_r', np.uint8),  # RGB color for visualization
+        ('color_r', np.uint8),  # RGB colour for visualisation
         ('color_g', np.uint8),
         ('color_b', np.uint8),
     ]

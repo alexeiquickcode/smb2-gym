@@ -12,103 +12,94 @@ from typing import (
 import numpy as np
 import pygame
 
-from smb2_gym.actions import actions_to_buttons
 from smb2_gym.app import InitConfig
-from smb2_gym.app.info_display import (
-    create_info_panel,
-    get_required_info_height,
-)
-from smb2_gym.app.keyboard import KEYBOARD_MAPPING
-from smb2_gym.app.rendering import render_frame
+from smb2_gym.app.info_display import get_required_info_height
+from smb2_gym.app.keyboard import get_action_from_keyboard
+from smb2_gym.app.play_display import render_all
 from smb2_gym.constants import (
     DEFAULT_SCALE,
     FONT_SIZE_BASE,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
-    TILE_COLORS,
     WINDOW_CAPTION,
-    FineTileType,
 )
 from smb2_gym.smb2_env import SuperMarioBros2Env
 
 
-def draw_semantic_map(
-    surface: pygame.Surface,
-    semantic_map: np.ndarray,
-    x_offset: int,
-    y_offset: int,
-    tile_size: int,
-) -> None:
-    """Draw the semantic tile map on the surface.
-
-    Args:
-        semantic_map: Structured array with 'fine_type', 'color_r', 'color_g', 'color_b' fields
-    """
-    height, width = semantic_map.shape
-
-    for y in range(height):
-        for x in range(width):
-            # Extract RGB color directly from structured array
-            color = (
-                int(semantic_map[y, x]['color_r']),
-                int(semantic_map[y, x]['color_g']),
-                int(semantic_map[y, x]['color_b']),
-            )
-
-            # Calculate position
-            screen_y = y * tile_size + y_offset
-            screen_x = x * tile_size + x_offset
-
-            rect = pygame.Rect(screen_x, screen_y, tile_size, tile_size)
-            pygame.draw.rect(surface, color, rect)
-            pygame.draw.rect(surface, (0, 0, 0), rect, 1)  # Black border
-
-
-def draw_player_position(
-    surface: pygame.Surface,
+def _handle_events(
     env: SuperMarioBros2Env,
-    x_offset: int,
-    y_offset: int,
-    tile_size: int,
-) -> None:
-    """Draw player position on the collision map."""
-    # Get player collision tiles from the environment
-    player_tiles = env.get_player_collision_tiles()
+    paused: bool,
+    game_over: bool,
+) -> tuple[bool, bool, bool]:
+    """Handle pygame events.
 
-    for tile_x, tile_y in player_tiles:
-        screen_x = tile_x * tile_size + x_offset + tile_size // 2
-        screen_y = tile_y * tile_size + y_offset + tile_size // 2
-        pygame.draw.circle(surface, (255, 255, 255), (screen_x, screen_y), tile_size // 3)
-        pygame.draw.circle(surface, (255, 0, 0), (screen_x, screen_y), tile_size // 3, 2)
+    Returns:
+        Tuple of (running, paused, game_over)
+    """
+    running = True
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                running = False
+            elif event.key == pygame.K_p:
+                paused = not paused
+            elif event.key == pygame.K_r:
+                env.reset()
+                game_over = False
+                print("Game reset!")
+            elif event.key == pygame.K_F5:
+                try:
+                    env.save_state(0)
+                    print("State saved to save_state_0.sav")
+                except Exception as e:
+                    print(f"Failed to save state: {e}")
+            elif event.key == pygame.K_F9:
+                try:
+                    env.load_state(0)
+                    print("State loaded from save_state_0.sav")
+                except Exception as e:
+                    print(f"Failed to load state: {e}")
+
+    return running, paused, game_over
 
 
-def draw_legend(
-    surface: pygame.Surface,
-    font: pygame.font.Font,
-    x_offset: int,
-    y_offset: int,
-) -> None:
-    """Draw a legend for semantic tile types."""
-    y_pos = y_offset
+def _setup_pygame(
+    scale: int,
+) -> tuple[pygame.Surface, pygame.font.Font, pygame.font.Font, pygame.time.Clock, int, int, int,
+           int]:
+    """Setup pygame display, fonts, and clock.
 
-    # Iterate through all FineTileType enum values
-    for tile_type in FineTileType:
-        # Skip EMPTY for cleaner legend
-        if tile_type == FineTileType.EMPTY:
-            continue
+    Returns:
+        Tuple of (screen, font, small_font, clock, game_width, game_height, total_width, total_height)
+    """
+    pygame.init()
 
-        color = TILE_COLORS.get(tile_type, (128, 128, 128))
+    # Calculate dimensions
+    game_width = SCREEN_WIDTH * scale
+    game_height = SCREEN_HEIGHT * scale
+    semantic_map_width = 16 * 20  # 16 tiles * 20 pixels per tile
+    semantic_map_height = 15 * 20  # 15 tiles * 20 pixels per tile
 
-        # Draw color box
-        rect = pygame.Rect(x_offset, y_pos, 16, 16)
-        pygame.draw.rect(surface, color, rect)
-        pygame.draw.rect(surface, (0, 0, 0), rect, 1)
+    total_width = game_width + semantic_map_width + 200  # Extra space for legend
+    total_height = max(game_height, semantic_map_height) + 100  # Extra space for info
 
-        # Draw text using enum name
-        text = font.render(tile_type.name, True, (255, 255, 255))
-        surface.blit(text, (x_offset + 20, y_pos))
+    # Create display
+    info_height = get_required_info_height(scale)
+    screen = pygame.display.set_mode((total_width, total_height + info_height))
+    pygame.display.set_caption(WINDOW_CAPTION)
 
-        y_pos += 20
+    # Create fonts
+    font_size = FONT_SIZE_BASE * scale // 2
+    font = pygame.font.Font(None, font_size)
+    small_font = pygame.font.Font(None, 16)
+
+    # Create clock
+    clock = pygame.time.Clock()
+
+    return screen, font, small_font, clock, game_width, game_height, total_width, total_height
 
 
 # ------------------------------------------------------------------------------
@@ -134,36 +125,22 @@ def play_human(
         custom_state: Custom save state file path - used with custom_rom
         scale: Display scale factor
     """
-    pygame.init()
-
-    # Create initialization config
+    # Create initialisation config
     if custom_rom:
         config = InitConfig(rom_path=custom_rom, save_state_path=custom_state)
     else:
         config = InitConfig(level=level or "1-1", character=character or "luigi")
 
-    # Print initialization info
+    # Print initialisation info
     print(config.describe())
 
     # Create env
     env = SuperMarioBros2Env(init_config=config)
 
-    # Setup pygame - wider window for side-by-side display
-    game_width = SCREEN_WIDTH * scale
-    game_height = SCREEN_HEIGHT * scale
-    semantic_map_width = 16 * 20  # 16 tiles * 20 pixels per tile
-    semantic_map_height = 15 * 20  # 15 tiles * 20 pixels per tile
-
-    total_width = game_width + semantic_map_width + 200  # Extra space for legend
-    total_height = max(game_height, semantic_map_height) + 100  # Extra space for info
-
-    info_height = get_required_info_height(scale)
-    screen = pygame.display.set_mode((total_width, total_height + info_height))
-    pygame.display.set_caption(WINDOW_CAPTION)
-    font_size = FONT_SIZE_BASE * scale // 2
-    font = pygame.font.Font(None, font_size)
-    small_font = pygame.font.Font(None, 16)
-    clock = pygame.time.Clock()  # Clock for FPS
+    # Setup pygame
+    screen, font, small_font, clock, game_width, game_height, total_width, total_height = _setup_pygame(
+        scale
+    )
 
     # Reset environment
     obs, info = env.reset()
@@ -187,124 +164,37 @@ def play_human(
 
     game_over = False
     while running:
-
-        # Handle events
-        keys_pressed = []
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    running = False
-                elif event.key == pygame.K_p:
-                    paused = not paused
-                elif event.key == pygame.K_r:
-                    obs, info = env.reset()
-                    game_over = False
-                    print("Game reset!")
-                elif event.key == pygame.K_F5:
-                    try:
-                        env.save_state(0)
-                        print("State saved to save_state_0.sav")
-                    except Exception as e:
-                        print(f"Failed to save state: {e}")
-                elif event.key == pygame.K_F9:
-                    try:
-                        env.load_state(0)
-                        print("State loaded from save_state_0.sav")
-                    except Exception as e:
-                        print(f"Failed to load state: {e}")
+        running, paused, game_over = _handle_events(env, paused, game_over)
 
         if not paused and not game_over:
-            # Get keyboard state
-            keys = pygame.key.get_pressed()
+            action = get_action_from_keyboard()
+            obs, reward, terminated, truncated, info = env.step(np.int64(action))
 
-            # Check keyboard mappings
-            for key, action in KEYBOARD_MAPPING.items():
-                if keys[key]:
-                    if action not in keys_pressed:
-                        keys_pressed.append(action)
+            if terminated or truncated:
+                if info.get('level_completed'):
+                    print("Level Completed! Continuing to next area...")
+                else:
+                    print("Game Over! Press R (in game window) to reset or ESC to quit.")
+                    game_over = True
 
-            # Convert to action based on environment type
-            buttons = actions_to_buttons(keys_pressed)
-            action = 0  # Default to NOOP
-
-            # Map button combinations to simple actions
-            if buttons[5] and buttons[0]:  # DOWN + A (super jump if charged)
-                action = 11
-            elif buttons[6] and buttons[0]:  # LEFT + A
-                action = 7
-            elif buttons[7] and buttons[0]:  # RIGHT + A
-                action = 6
-            elif buttons[6] and buttons[1]:  # LEFT + B
-                action = 9
-            elif buttons[7] and buttons[1]:  # RIGHT + B
-                action = 8
-            elif buttons[5]:  # DOWN (crouch/charge)
-                action = 10
-            elif buttons[6]:  # LEFT
-                action = 2
-            elif buttons[7]:  # RIGHT
-                action = 1
-            elif buttons[4]:  # UP
-                action = 3
-            elif buttons[0]:  # A
-                action = 4
-            elif buttons[1]:  # B
-                action = 5
-
-            # Step environment
-            obs, reward, terminated, truncated, info = env.step(action)
-
-            # if terminated or truncated:
-            #     if info.get('level_completed'):
-            #         print("Level Completed! Continuing to next area...")
-            #     else:
-            #         print("Game Over! Press R (in game window) to reset or ESC to quit.")
-            #         game_over = True
-
-        # Clear screen
-        screen.fill((40, 40, 40))
-
-        # Render game on the left side
-        game_surface = pygame.Surface((game_width, game_height))
-        render_frame(game_surface, obs, game_width, game_height)
-        screen.blit(game_surface, (10, 10))
-
-        # Get and render semantic map on the right side
-        semantic_map = env.semantic_map
-        map_x_offset = game_width + 30
-        map_y_offset = 10
-        tile_size = 20
-
-        draw_semantic_map(screen, semantic_map, map_x_offset, map_y_offset, tile_size)
-        draw_player_position(screen, env, map_x_offset, map_y_offset, tile_size)
-
-        # Draw semantic map title
-        title_text = font.render("Semantic Map", True, (255, 255, 255))
-        screen.blit(title_text, (map_x_offset, map_y_offset - 30))
-
-        # Draw legend
-        legend_x = map_x_offset + (16 * tile_size) + 10
-        legend_y = map_y_offset
-        legend_title = small_font.render("Legend:", True, (255, 255, 255))
-        screen.blit(legend_title, (legend_x, legend_y))
-        draw_legend(screen, small_font, legend_x, legend_y + 20)
-
-        # Draw game info panel at bottom
-        create_info_panel(screen, info, font, total_height, total_width)
-
-        # Draw pause indicator
-        if paused:
-            pause_text = font.render("PAUSED", True, (255, 255, 0))
-            text_rect = pause_text.get_rect(center=(total_width // 2, total_height // 2))
-            screen.blit(pause_text, text_rect)
+        render_all(
+            screen,
+            obs,
+            env,
+            info,
+            game_width,
+            game_height,
+            total_width,
+            total_height,
+            font,
+            small_font,
+            paused,
+        )
 
         # Update display
         pygame.display.flip()
         clock.tick(60)  # 60 FPS for human play
 
-    # Cleanup
     env.close()
     pygame.quit()
 
@@ -320,7 +210,7 @@ def main() -> None:
         description="Play Super Mario Bros 2 with keyboard controls",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-        Initialization modes:
+        Initialisation modes:
           1. Character/Level mode (default):
              --level 1-1 --char peach
 
@@ -330,12 +220,16 @@ def main() -> None:
           3. Custom ROM mode:
              --custom-rom /path/to/rom.nes --custom-state /path/to/save.sav
 
-        Only one initialization mode can be used at a time.
+        Only one initialisation mode can be used at a time.
         """
     )
 
     # Character/Level mode arguments
-    parser.add_argument("--level", type=str, help="Level to play (e.g., 1-1, 1-2)")
+    parser.add_argument(
+        "--level",
+        type=str,
+        help="Level to play (e.g., 1-1, 1-2)",
+    )
     parser.add_argument(
         "--char",
         type=str,
@@ -345,16 +239,36 @@ def main() -> None:
 
     # Built-in ROM mode arguments
     parser.add_argument(
-        "--rom", type=str, choices=["prg0", "prg0_edited"], help="ROM variant to use"
+        "--rom",
+        type=str,
+        choices=["prg0", "prg0_edited"],
+        help="ROM variant to use",
     )
-    parser.add_argument("--save-state", type=str, help="Save state file to load")
+    parser.add_argument(
+        "--save-state",
+        type=str,
+        help="Save state file to load",
+    )
 
     # Custom ROM mode arguments
-    parser.add_argument("--custom-rom", type=str, help="Custom ROM file path")
-    parser.add_argument("--custom-state", type=str, help="Custom save state file path")
+    parser.add_argument(
+        "--custom-rom",
+        type=str,
+        help="Custom ROM file path",
+    )
+    parser.add_argument(
+        "--custom-state",
+        type=str,
+        help="Custom save state file path",
+    )
 
     # Common arguments
-    parser.add_argument("--scale", type=int, default=DEFAULT_SCALE, help="Display scale factor")
+    parser.add_argument(
+        "--scale",
+        type=int,
+        default=DEFAULT_SCALE,
+        help="Display scale factor",
+    )
     parser.add_argument(
         "--no-save-state",
         action="store_true",
@@ -364,7 +278,7 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
-        # Create initialization config (validates arguments)
+        # Create init config (validates arguments)
         if args.custom_rom:
             config = InitConfig(
                 rom_path=args.custom_rom,
@@ -380,6 +294,17 @@ def main() -> None:
             if args.save_state and not args.no_save_state:
                 save_path = os.path.join(package_dir, '_nes', args.rom, 'saves', args.save_state)
             config = InitConfig(rom_path=rom_path, save_state_path=save_path)
+        elif args.char is None:
+            # No character specified - use select folder save states
+            package_dir = os.path.dirname(os.path.abspath(__file__))  # This is smb2_gym/
+            rom_path = os.path.join(package_dir, '_nes', 'prg0', 'super_mario_bros_2_prg0.nes')
+            level = args.level or "1-1"
+            save_path = None
+            if not args.no_save_state:
+                save_path = os.path.join(
+                    package_dir, '_nes', 'prg0', 'saves', 'select', f'{level}.sav'
+                )
+            config = InitConfig(rom_path=rom_path, save_state_path=save_path)
         else:
             config = InitConfig(level=args.level, character=args.char)
 
@@ -391,7 +316,7 @@ def main() -> None:
                 print("Auto-navigating to character selection screen...")
                 print("Use arrow keys to select character, then press Z (A button) to start!")
 
-        # Convert config to play_human parameters for backwards compatibility
+        # Call play_human with appropriate parameters based on mode
         if args.custom_rom:
             play_human(
                 custom_rom=args.custom_rom,
@@ -399,6 +324,13 @@ def main() -> None:
                 scale=args.scale,
             )
         elif args.rom:  # Built-in ROM variant mode
+            play_human(
+                custom_rom=config.rom_path,
+                custom_state=config.save_state_path,
+                scale=args.scale,
+            )
+        elif args.char is None:
+            # Use select folder save states
             play_human(
                 custom_rom=config.rom_path,
                 custom_state=config.save_state_path,

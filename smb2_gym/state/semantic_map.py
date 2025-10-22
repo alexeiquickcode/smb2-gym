@@ -17,7 +17,7 @@ from ..constants import (
     SCREEN_TILES_HEIGHT,
     SCREEN_TILES_WIDTH,
     TILE_SIZE,
-    Enemy,
+    VIEWPORT,
     EnemyState,
 )
 from ..constants.semantic import (
@@ -27,10 +27,13 @@ from ..constants.semantic import (
     TILE_ID_MAPPING,
     FineTileType,
 )
-from ._base import GameStateMixin
+from ._base import (
+    GameStateMixin,
+    HasEnemies,
+)
 
 
-class SemanticMapMixin(GameStateMixin):
+class SemanticMapMixin(GameStateMixin, HasEnemies):
     """Mixin providing semantic tile map for SMB2 environment.
 
     This mixin provides access to semantic tile information including:
@@ -43,7 +46,6 @@ class SemanticMapMixin(GameStateMixin):
     """
 
     _nes: NesEnv  # Parent class for type checking
-    enemies: list[Enemy]  # Provided by EnemiesMixin for type checking
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -96,7 +98,7 @@ class SemanticMapMixin(GameStateMixin):
             True if player is ducking, False otherwise
         """
         # Check if player has 2+ hearts (is big)
-        life_meter = self._read_ram_safe(PLAYER.LIFE_METER, default=0x0F)
+        life_meter = self._read_ram_safe(PLAYER.LIFE_METER)
         num_hearts = (life_meter >> 4) + 1
 
         # Only big players can duck
@@ -141,7 +143,7 @@ class SemanticMapMixin(GameStateMixin):
         x_tile = (center_x + TILE_SIZE // 2) // TILE_SIZE
 
         # Check if player has 2+ hearts (is big)
-        life_meter = self._read_ram_safe(PLAYER.LIFE_METER, default=0x0F)
+        life_meter = self._read_ram_safe(PLAYER.LIFE_METER)
         num_hearts = (life_meter >> 4) + 1
         is_big = num_hearts >= 2
 
@@ -255,27 +257,18 @@ class SemanticMapMixin(GameStateMixin):
         Returns:
             tuple of (viewport_x_offset, viewport_y_offset) in tiles
         """
-        # Screen boundary addresses from SMB2 disassembly
-        # https://github.com/Xkeeper0/smb2/blob/master/src/ram.asm
-        SCREEN_BOUNDARY_LEFT_HI = 0x04BE  # High byte of left screen boundary (page)
-        SCREEN_BOUNDARY_LEFT_LO = 0x04BF  # Low byte of left screen boundary (offset)
-        SCREEN_Y_HI = 0x00CA  # High byte of vertical screen position
-        SCREEN_Y_LO = 0x00CB  # Low byte of vertical screen position
-        PPU_SCROLL_X_MIRROR = 0x00FD  # Horizontal scroll position (within nametable)
-        PPU_SCROLL_Y_MIRROR = 0x00FC  # Vertical scroll position (within nametable)
-
         # Read the camera base position
-        viewport_x_hi = self._read_ram_safe(SCREEN_BOUNDARY_LEFT_HI, default=0)
-        viewport_x_lo = self._read_ram_safe(SCREEN_BOUNDARY_LEFT_LO, default=0)
-        viewport_y_hi = self._read_ram_safe(SCREEN_Y_HI, default=0)
-        viewport_y_lo = self._read_ram_safe(SCREEN_Y_LO, default=0)
+        viewport_x_hi = self._read_ram_safe(VIEWPORT.SCREEN_BOUNDARY_LEFT_HI)
+        viewport_x_lo = self._read_ram_safe(VIEWPORT.SCREEN_BOUNDARY_LEFT_LO)
+        viewport_y_hi = self._read_ram_safe(VIEWPORT.SCREEN_Y_HI)
+        viewport_y_lo = self._read_ram_safe(VIEWPORT.SCREEN_Y_LO)
 
         # Read PPU scroll positions for fine scrolling
-        scroll_x = self._read_ram_safe(PPU_SCROLL_X_MIRROR, default=0)
-        scroll_y = self._read_ram_safe(PPU_SCROLL_Y_MIRROR, default=0)
+        scroll_x = self._read_ram_safe(VIEWPORT.PPU_SCROLL_X_MIRROR)
+        scroll_y = self._read_ram_safe(VIEWPORT.PPU_SCROLL_Y_MIRROR)
 
         # Check scroll direction to determine scrolling type
-        scroll_direction = self._read_ram_safe(GAME_STATE.SCROLL_DIRECTION, default=0)
+        scroll_direction = self._read_ram_safe(GAME_STATE.SCROLL_DIRECTION)
 
         # Combine boundary and scroll positions
         # For horizontal scrolling levels (scroll_direction != 0x00):
@@ -314,7 +307,7 @@ class SemanticMapMixin(GameStateMixin):
         tile_type_map = np.zeros((SCREEN_TILES_HEIGHT, SCREEN_TILES_WIDTH), dtype=np.uint8)
 
         # Check if in subspace (subspace_status == 2 means in subspace)
-        subspace_status = self._read_ram_safe(GAME_STATE.SUBSPACE_STATUS, default=0)
+        subspace_status = self._read_ram_safe(GAME_STATE.SUBSPACE_STATUS)
         in_subspace = (subspace_status == 2)
 
         if in_subspace:
@@ -325,7 +318,7 @@ class SemanticMapMixin(GameStateMixin):
             for y in range(SCREEN_TILES_HEIGHT):
                 for x in range(SCREEN_TILES_WIDTH):
                     ram_address = SUBSPACE_RAM_START + (y * SCREEN_TILES_WIDTH + x)
-                    tile_id = self._read_ram_safe(ram_address, default=0)
+                    tile_id = self._read_ram_safe(ram_address)
                     tile_id_map[y, x] = tile_id
 
                     # Map tile ID to type
@@ -346,7 +339,7 @@ class SemanticMapMixin(GameStateMixin):
         viewport_x, viewport_y = self._get_viewport_offset()
 
         # Check scroll direction (0x00=horizontal, 0x01=vertical)
-        scroll_direction = self._read_ram_safe(GAME_STATE.SCROLL_DIRECTION, default=0)
+        scroll_direction = self._read_ram_safe(GAME_STATE.SCROLL_DIRECTION)
 
         # SRAM contains level data
         MAX_SRAM_SIZE = 0x960  # 2400 bytes
@@ -407,7 +400,7 @@ class SemanticMapMixin(GameStateMixin):
         - tile_id: Raw game object ID (BackgroundTile/EnemyId)
         - fine_type: Fine-grained FineTileType (SOLID, ENEMY, etc.)
         - coarse_type: Coarse-grained CoarseTileType (TERRAIN, ENEMY, etc.)
-        - color_r, color_g, color_b: RGB visualization color
+        - color_r, color_g, color_b: RGB visualisation colour
 
         Returns:
             2D structured numpy array (15 x 16) with SEMANTIC_TILE_DTYPE (height x width).

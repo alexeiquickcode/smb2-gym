@@ -20,7 +20,7 @@ class PlayerStateMixin(GameStateMixin):
     @property
     def lives(self) -> int:
         """Get current lives."""
-        lives = self._read_ram_safe(PLAYER.LIVES, default=2)
+        lives = self._read_ram_safe(PLAYER.LIVES)
         if 0 <= lives <= MAX_LIVES:
             return lives
         return 2  # Default if invalid
@@ -28,7 +28,7 @@ class PlayerStateMixin(GameStateMixin):
     @property
     def character(self) -> int:
         """Get selected character (0=Mario, 1=Princess, 2=Toad, 3=Luigi)."""
-        char = self._read_ram_safe(GAME_STATE.CHARACTER, default=0)
+        char = self._read_ram_safe(GAME_STATE.CHARACTER)
         if 0 <= char <= 3:
             return char
         return 0
@@ -36,7 +36,7 @@ class PlayerStateMixin(GameStateMixin):
     @property
     def hearts(self) -> int:
         """Get current hearts (1-4)."""
-        life_meter = self._read_ram_safe(PLAYER.LIFE_METER, default=0x1F)
+        life_meter = self._read_ram_safe(PLAYER.LIFE_METER)
         hearts = ((life_meter & 0xF0) >> 4) + 1
         if 1 <= hearts <= MAX_HEARTS:
             return hearts
@@ -45,7 +45,7 @@ class PlayerStateMixin(GameStateMixin):
     @property
     def cherries(self) -> int:
         """Get cherries collected."""
-        cherries = self._read_ram_safe(PLAYER.CHERRIES, default=0)
+        cherries = self._read_ram_safe(PLAYER.CHERRIES)
         if 0 <= cherries <= MAX_CHERRIES:
             return cherries
         return 0
@@ -53,7 +53,7 @@ class PlayerStateMixin(GameStateMixin):
     @property
     def coins(self) -> int:
         """Get coins collected in Subspace."""
-        coins = self._read_ram_safe(PLAYER.SUBSPACE_COINS, default=0)
+        coins = self._read_ram_safe(PLAYER.SUBSPACE_COINS)
         if 0 <= coins <= MAX_COINS:
             return coins
         return 0
@@ -61,17 +61,17 @@ class PlayerStateMixin(GameStateMixin):
     @property
     def holding_item(self) -> bool:
         """Check if character is holding an item."""
-        return self._read_ram_safe(PLAYER.HOLDING_ITEM, default=0) == 1
+        return self._read_ram_safe(PLAYER.HOLDING_ITEM) == 1
 
     @property
     def item_pulled(self) -> int:
         """Get item pulled from ground."""
-        return self._read_ram_safe(PLAYER.ITEM_PULLED, default=0)
+        return self._read_ram_safe(PLAYER.ITEM_PULLED)
 
     @property
     def continues(self) -> int:
         """Get number of continues."""
-        continues = self._read_ram_safe(PLAYER.CONTINUES, default=0)
+        continues = self._read_ram_safe(PLAYER.CONTINUES)
         if 0 <= continues <= MAX_CONTINUES:
             return continues
         return 0
@@ -79,23 +79,23 @@ class PlayerStateMixin(GameStateMixin):
     @property
     def player_speed(self) -> int:
         """Get player horizontal speed (signed: positive=right, negative=left)."""
-        speed = self._read_ram_safe(PLAYER.SPEED, default=0)
+        speed = self._read_ram_safe(PLAYER.SPEED)
         return speed if speed < 128 else speed - 256
 
     @property
     def on_vine(self) -> bool:
         """Check if character is on a vine."""
-        return self._read_ram_safe(PLAYER.ON_VINE, default=0) == 1
+        return self._read_ram_safe(PLAYER.ON_VINE) == 1
 
     @property
     def big_vegetables_pulled(self) -> int:
         """Get total big vegetables pulled (required for stopwatch)."""
-        return self._read_ram_safe(PLAYER.BIG_VEGETABLES_PULLED, default=0)
+        return self._read_ram_safe(PLAYER.BIG_VEGETABLES_PULLED)
 
     @property
     def subspace_status(self) -> int:
         """Get subspace status (0=not in subspace, 2=in subspace)."""
-        return self._read_ram_safe(GAME_STATE.SUBSPACE_STATUS, default=0)
+        return self._read_ram_safe(GAME_STATE.SUBSPACE_STATUS)
 
     @property
     def level_transition(self) -> int:
@@ -116,67 +116,67 @@ class PlayerStateMixin(GameStateMixin):
         3 - end level, go to bonus game (level completed)
         4 - warp
         """
-        return self._read_ram_safe(GAME_STATE.LEVEL_TRANSITION, default=0)
+        return self._read_ram_safe(GAME_STATE.LEVEL_TRANSITION)
 
     @property
     def character_stats(self):
         """Get current character's statistics and abilities."""
-        character_id = self._read_ram_safe(GAME_STATE.CHARACTER, default=0)
+        character_id = self._read_ram_safe(GAME_STATE.CHARACTER)
         return get_character_stats(character_id)
 
     @property
     def starman_timer(self) -> int:
         """Get starman timer."""
-        return self._read_ram_safe(TIMERS.STARMAN, default=0)
+        return self._read_ram_safe(TIMERS.STARMAN)
 
     @property
     def subspace_timer(self) -> int:
         """Get subspace timer."""
-        return self._read_ram_safe(TIMERS.SUBSPACE, default=0)
+        return self._read_ram_safe(TIMERS.SUBSPACE)
 
     @property
     def stopwatch_timer(self) -> int:
         """Get stopwatch timer."""
-        return self._read_ram_safe(TIMERS.STOPWATCH, default=0)
+        return self._read_ram_safe(TIMERS.STOPWATCH)
 
     @property
     def invulnerability_timer(self) -> int:
         """Get invulnerability timer (time left until character becomes vulnerable)."""
-        return self._read_ram_safe(TIMERS.INVULNERABILITY, default=0)
+        return self._read_ram_safe(TIMERS.INVULNERABILITY)
 
     @property
     def framerule_timer(self) -> int:
         """Get general 256 frames framerule counter."""
-        return self._read_ram_safe(TIMERS.FRAMERULE, default=0)
+        return self._read_ram_safe(TIMERS.FRAMERULE)
 
     @property
     def pidget_carpet_timer(self) -> int:
         """Get time left to use Pidget's carpet."""
-        return self._read_ram_safe(TIMERS.PIDGET_CARPET, default=0)
+        return self._read_ram_safe(TIMERS.PIDGET_CARPET)
 
     @property
     def float_timer(self) -> int:
         """Get Princess float timer (available float time, max 60 frames = 1 second)."""
-        return self._read_ram_safe(TIMERS.FLOAT, default=0)
+        return self._read_ram_safe(TIMERS.FLOAT)
 
     @property
     def door_transition_timer(self) -> int:
         """Get door transition timer."""
-        return self._read_ram_safe(TIMERS.DOOR_TRANSITION, default=0)
+        return self._read_ram_safe(TIMERS.DOOR_TRANSITION)
 
     @property
     def player_state(self) -> int:
         """Get player state/animation."""
-        return self._read_ram_safe(PLAYER.STATE, default=0)
+        return self._read_ram_safe(PLAYER.STATE)
 
     @property
     def levels_finished(self) -> dict[str, int]:
         """Get levels finished per character."""
         return {
-            'mario': self._read_ram_safe(PLAYER.LEVELS_FINISHED_MARIO, default=0),
-            'peach': self._read_ram_safe(PLAYER.LEVELS_FINISHED_PEACH, default=0),
-            'toad': self._read_ram_safe(PLAYER.LEVELS_FINISHED_TOAD, default=0),
-            'luigi': self._read_ram_safe(PLAYER.LEVELS_FINISHED_LUIGI, default=0),
+            'mario': self._read_ram_safe(PLAYER.LEVELS_FINISHED_MARIO),
+            'peach': self._read_ram_safe(PLAYER.LEVELS_FINISHED_PEACH),
+            'toad': self._read_ram_safe(PLAYER.LEVELS_FINISHED_TOAD),
+            'luigi': self._read_ram_safe(PLAYER.LEVELS_FINISHED_LUIGI),
         }
 
     @property

@@ -1,4 +1,4 @@
-"""Info display module for Super Mario Bros 2 with clean table format."""
+"""Info display module for Super Mario Bros 2."""
 
 from typing import Any
 
@@ -126,7 +126,7 @@ def create_info_panel(
     line_height = 18  # Increased from 16 to add 2 pixels spacing between rows
     col_width = screen_width // 4
 
-    # Text colors
+    # Text colours
     label_color = (150, 150, 150)
     value_color = (255, 255, 255)
     header_color = (100, 180, 255)
@@ -232,21 +232,21 @@ def create_info_panel(
             total_width = screen_width - 2 * padding
             base_width = total_width // 10
             col_widths = [
-                int(base_width * 0.5),  # Slot - smaller
-                int(base_width * 1.5),  # Name - bigger
-                int(base_width * 0.3),  # HP - smaller
+                int(base_width * 0.5),  # Slot
+                int(base_width * 1.5),  # Name
+                int(base_width * 0.3),  # HP
                 int(base_width * 0.9),  # (X, Y)
                 int(base_width * 0.9),  # (RelX, RelY)
-                int(base_width * 0.9),  # Vel (X, Y) - signed velocities
-                int(base_width * 0.8),  # State - bigger (VISIBLE, INVISIBLE, DEAD)
-                int(base_width * 0.5),  # Timer - smaller
-                int(base_width * 1.4),  # Flags - bigger for multiple flags
-                int(base_width * 1.4)  # Collision - bigger for multiple flags
+                int(base_width * 0.9),  # Vel (X, Y)
+                int(base_width * 0.8),  # State - VISIBLE, INVISIBLE, DEAD
+                int(base_width * 0.5),  # Timer
+                int(base_width * 1.4),  # Flags
+                int(base_width * 1.4)  # Collision
             ]
 
             x_offset = x_start
             for j, cell in enumerate(row):
-                # Use header color for enemy table header row (index 14)
+                # Use header colour for enemy table header row (index 14)
                 # POSITION (0-6 = 7 rows), PLAYER (7-13 = 7 rows), ENEMIES header (14), enemy header (15), enemies (16-24)
                 color = header_color if i == 15 else value_color
                 cell_surface = font.render(str(cell), True, color)
@@ -281,14 +281,3 @@ def create_info_panel(
             current_y += 6
 
     return info_height
-
-
-def draw_info(
-    screen: pygame.Surface,
-    info: dict[str, Any],
-    font: pygame.font.Font,
-    start_y: int = 10,
-    screen_width: int = 512
-) -> None:
-    """Legacy function for compatibility."""
-    create_info_panel(screen, info, font, start_y, screen_width)
