@@ -188,6 +188,17 @@ class GameState:
     SUBSPACE_STATUS: int = 0x0628
 
 
+@dataclass
+class Viewport:
+    """Viewport and camera position RAM addresses."""
+    SCREEN_BOUNDARY_LEFT_HI: int = 0x04BE  # High byte of left screen boundary (page)
+    SCREEN_BOUNDARY_LEFT_LO: int = 0x04BF  # Low byte of left screen boundary (offset)
+    SCREEN_Y_HI: int = 0x00CA  # High byte of vertical screen position
+    SCREEN_Y_LO: int = 0x00CB  # Low byte of vertical screen position
+    PPU_SCROLL_X_MIRROR: int = 0x00FD  # Horizontal scroll position (within nametable)
+    PPU_SCROLL_Y_MIRROR: int = 0x00FC  # Vertical scroll position (within nametable)
+
+
 ENEMY_SLOTS = [ \
     EnemySlot(slot_number=0, x_position=0x0029, y_position=0x0033, x_page=0x0015, y_page=0x001F, object_type=0x0090, health=0x0465, state=0x0051, x_velocity=0x003D, y_velocity=0x0047, direction=0x006F, collision=0x005B, object_timer=0x0086, sprite_flags=0x046E),
     EnemySlot(slot_number=1, x_position=0x002A, y_position=0x0034, x_page=0x0016, y_page=0x0020, object_type=0x0091, health=0x0466, state=0x0052, x_velocity=0x003E, y_velocity=0x0048, direction=0x0070, collision=0x005C, object_timer=0x0087, sprite_flags=0x046F),
@@ -233,7 +244,7 @@ SCREEN_TILES_HEIGHT = 15  # Visible tiles vertically (status bar excluded)
 
 # Game mechanics
 PAGE_SIZE = 256  # Memory page size for position calculations
-GAME_INIT_FRAMES = 300  # Frames to wait for game initialization
+GAME_INIT_FRAMES = 300  # Frames to wait for game initialisation
 
 # Save state slots
 MAX_SAVE_SLOTS = 10  # 0-9
@@ -283,6 +294,7 @@ LEVEL_NAMES = {
 PLAYER = Player()
 TIMERS = Timers()
 GAME_STATE = GameState()
+VIEWPORT = Viewport()
 
 # ------------------------------------------------------------------------------
 # ---- Other / Not Used --------------------------------------------------------

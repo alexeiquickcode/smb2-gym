@@ -1,4 +1,15 @@
-"""Constants for SMB2 gym environment."""
+"""
+All Constants for SMB2 gym environment. Including RAM locations as well as 
+additional constants used within this library. Many of these constants have been
+pulled from:
+
+https://datacrystal.tcrf.net/wiki/Super_Mario_Bros._2_(NES)/RAM_map
+and 
+https://github.com/Xkeeper0/smb2
+
+However some fields in these classes do not directly align with the above 
+references and there have been some additional fields added.
+"""
 
 from .character_stats import (
     CharacterStats,

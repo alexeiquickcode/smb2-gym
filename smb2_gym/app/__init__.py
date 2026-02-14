@@ -12,7 +12,6 @@ from ..constants import (
 )
 from .info_display import (
     create_info_panel,
-    draw_info,
     get_required_info_height,
 )
 
@@ -130,5 +129,4 @@ __all__ = [
     'InitConfig',
     'create_info_panel',
     'get_required_info_height',
-    'draw_info',
 ]

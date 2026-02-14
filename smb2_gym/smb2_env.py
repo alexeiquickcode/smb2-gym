@@ -36,7 +36,7 @@ from .state.semantic_map import SemanticMapMixin
 
 
 class SuperMarioBros2Env(
-    gym.Env[np.ndarray, np.int64],
+    gym.Env,
     PositionMixin,
     PlayerStateMixin,
     EnemiesMixin,
@@ -70,7 +70,7 @@ class SuperMarioBros2Env(
         """Initialize the SMB2 environment.
 
         Args:
-            init_config: InitConfig object specifying initialization mode
+            init_config: InitConfig object specifying initialisation mode
             render_mode: 'human' or None
             max_episode_steps: Maximum steps per episode (for truncation)
             action_type: Type of action space
@@ -252,6 +252,7 @@ class SuperMarioBros2Env(
         else:
             # When no save state, navigate to character selection screen
             # Wait for title screen to appear
+            # TODO: Onces we have all the save states perhaps remove this logic
             for _ in range(120):  # 2 seconds
                 self._nes.step([False] * 8, render=False)
 
@@ -376,59 +377,33 @@ class SuperMarioBros2Env(
             return self._last_obs
         return None
 
-    def _get_y_position(self, address: int) -> int:
-        """Safely read Y position from RAM and clamp to valid range.
-
-        Args:
-            address: RAM address to read Y position from
-
-        Returns:
-            Y position clamped to 0-239 range
-        """
-        y_pos = self._read_ram_safe(address, default=0)
-        return max(0, min(y_pos, SCREEN_HEIGHT - 1))
-
-    def _read_ram_safe(self, address: int, default: int = 0) -> int:
-        """Safely read from RAM with fallback.
+    def _read_ram_safe(self, address: int) -> int:
+        """Read from RAM.
 
         Args:
             address: RAM address to read
-            default: Default value if RAM reading is not available
 
         Returns:
-            Value at RAM address or default
+            Value at RAM address
         """
-        if hasattr(self._nes, 'read_ram'):
-            return self._nes.read_ram(address)
-        return default
+        return self._nes.read_ram(address)
 
-    def _read_ppu(self, address: int, default: int = 0) -> int:
+    def _read_ppu(self, address: int) -> int:
         """Read from PPU memory.
 
         Args:
             address: PPU address to read (e.g., 0x2000-0x23FF for nametable)
-            default: Default value if PPU reading is not available
 
         Returns:
-            Value at PPU address or default
+            Value at PPU address
         """
-        if hasattr(self._nes, 'read_ppu'):
-            return self._nes.read_ppu(address)
-        return default
+        return self._nes.read_ppu(address)
 
     # ---- Properties ------------------------------------------------
 
     @property
     def pos(self):
-        """Position and coordinate properties from PositionMixin.
-
-        Provides access to:
-            - x_global, x_local, x_page
-            - y_global, y_local, y_page
-            - area, sub_area, spawn_page
-            - current_page, total_pages
-            - is_vertical, global_coords
-        """
+        """Position and coordinate properties from PositionMixin."""
 
         class PositionAccessor:
 
@@ -491,13 +466,7 @@ class SuperMarioBros2Env(
 
     @property
     def game(self):
-        """World and level state properties from PositionMixin.
-
-        Provides access to:
-            - world: World number (1-based)
-            - level: Level string (e.g., '1-1', '7-2')
-            - is_game_over: True if game over (lives = 0)
-        """
+        """World and level state properties from PositionMixin."""
 
         class GameAccessor:
 
@@ -522,20 +491,7 @@ class SuperMarioBros2Env(
 
     @property
     def pc(self):
-        """Player character state properties from PlayerStateMixin.
-
-        Provides access to:
-            - lives, character, hearts
-            - cherries, coins, continues
-            - holding_item, item_pulled, big_vegetables_pulled
-            - speed, on_vine
-            - starman_timer, subspace_timer, stopwatch_timer
-            - invulnerability_timer, framerule_timer, pidget_carpet_timer
-            - float_timer, door_transition_timer
-            - state, levels_finished, level_completed
-            - subspace_status, level_transition
-            - stats
-        """
+        """Player character state properties from PlayerStateMixin."""
 
         class PlayerCharacterAccessor:
 
@@ -652,7 +608,7 @@ class SuperMarioBros2Env(
             - tile_id: Raw BackgroundTile ID
             - fine_type: Fine-grained FineTileType (SOLID, ENEMY, etc.)
             - coarse_type: Coarse-grained CoarseTileType (TERRAIN, ENEMY, etc.)
-            - color_r, color_g, color_b: RGB visualization color
+            - color_r, color_g, color_b: RGB visualisation colour
         """
         return self.semantic_map
 
@@ -683,7 +639,7 @@ class SuperMarioBros2Env(
         if self._previous_lives is None:
             return False
 
-        # Don't detect life loss during initialization
+        # Don't detect life loss during initialisation
         if self._episode_steps < GAME_INIT_FRAMES:
             return False
 

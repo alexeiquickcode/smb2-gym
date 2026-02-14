@@ -16,7 +16,7 @@ class EnemiesMixin(GameStateMixin):
     @property
     def enemies_defeated(self) -> int:
         """Get count of enemies defeated (for heart spawning)."""
-        return self._read_ram_safe(PLAYER.ENEMIES_DEFEATED, default=0)
+        return self._read_ram_safe(PLAYER.ENEMIES_DEFEATED)
 
     @property
     def enemies(self) -> list[Enemy]:
@@ -28,7 +28,7 @@ class EnemiesMixin(GameStateMixin):
         """
         enemies_data = []
         for slot in ENEMY_SLOTS:
-            state = self._read_ram_safe(slot.state, default=0)
+            state = self._read_ram_safe(slot.state)
 
             if state in [EnemyState.INVISIBLE, EnemyState.DEAD]:
                 enemies_data.append(
@@ -51,31 +51,30 @@ class EnemiesMixin(GameStateMixin):
                 )
             else:
                 # Read Y position and invert it (y=0 at bottom)
-                y_pos_raw = self._get_y_position(slot.y_position)
+                y_pos_raw = self._read_ram_safe(slot.y_position)
                 y_pos_inverted = SCREEN_HEIGHT - 1 - y_pos_raw
 
                 # Read velocities and convert to signed
-                x_vel_raw = self._read_ram_safe(slot.x_velocity, default=0)
+                x_vel_raw = self._read_ram_safe(slot.x_velocity)
                 x_vel_signed = x_vel_raw if x_vel_raw < 128 else x_vel_raw - 256
-                y_vel_raw = self._read_ram_safe(slot.y_velocity, default=0)
+                y_vel_raw = self._read_ram_safe(slot.y_velocity)
                 y_vel_signed = y_vel_raw if y_vel_raw < 128 else y_vel_raw - 256
 
                 enemy = Enemy(
                     slot_number=slot.slot_number,
-                    x_position=self._read_ram_safe(slot.x_position, default=0),
+                    x_position=self._read_ram_safe(slot.x_position),
                     y_position=y_pos_inverted,
-                    x_page=self._read_ram_safe(slot.x_page, default=0),
-                    y_page=self._read_ram_safe(slot.y_page, default=0),
-                    object_type=self._read_ram_safe(slot.object_type, default=0),
-                    health=self._read_ram_safe(slot.health, default=0),
+                    x_page=self._read_ram_safe(slot.x_page),
+                    y_page=self._read_ram_safe(slot.y_page),
+                    object_type=self._read_ram_safe(slot.object_type),
+                    health=self._read_ram_safe(slot.health),
                     state=state,
                     x_velocity=x_vel_signed,
                     y_velocity=y_vel_signed,
-                    direction=self._read_ram_safe(slot.direction, default=0),
-                    collision=self._read_ram_safe(slot.collision, default=0),
-                    object_timer=self._read_ram_safe(slot.object_timer, default=0),
-                    sprite_flags=self._read_ram_safe(slot.sprite_flags, default=0)
+                    direction=self._read_ram_safe(slot.direction),
+                    collision=self._read_ram_safe(slot.collision),
+                    object_timer=self._read_ram_safe(slot.object_timer),
+                    sprite_flags=self._read_ram_safe(slot.sprite_flags)
                 )
                 enemies_data.append(enemy)
         return enemies_data
-

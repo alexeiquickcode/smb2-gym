@@ -8,12 +8,12 @@ A Gymnasium environment for Super Mario Bros 2 (Europe/Doki Doki Panic version) 
 
 **Features:**
 - Curated action sets for faster training (`simple`, `complex`)
-- Comprehensive game state via info dict (35+ properties)
-- Multiple initialization modes (character/level, custom ROMs, save states)
+- Comprehensive game state via info dict (50+ properties) and a semantic tile map
+- Multiple initialisation modes (character/level, custom ROMs, save states)
 - Human-playable interface with keyboard controls
 - Up to 350+ and 750+ FPS rendered and non-rendered respectively
 
-A somewhat comprehensive list of the available RAM map properties is available at [Data Crystal](https://datacrystal.tcrf.net/wiki/Super_Mario_Bros._2_(NES)/RAM_map), but this library includes many extras that are not documented anywhere.
+![Example gameplay showing Luigi in level 1-2 with semantic tile map visualisation](assets/example-gameplay.png)
 
 ## Installation
 
@@ -34,7 +34,7 @@ config = InitConfig(level="1-1", character="luigi")
 env = SuperMarioBros2Env(
     init_config=config,
     render_mode="human",     # "human" or None
-    action_type="simple"     # "simple" (11), "complex" (16), or "all" (256)
+    action_type="simple"     # "simple" (12), "complex" (16), or "all" (256)
 )
 
 # Reset environment
@@ -46,8 +46,8 @@ for _ in range(1000):
     obs, reward, terminated, truncated, info = env.step(action)
 
     # Access game state from info dict
-    print(f"Lives: {info['life']}, Hearts: {info['hearts']}")
-    print(f"Position: ({info['x_pos_global']}, {info['y_pos_global']})")
+    print(f"Lives: {info['pc'].lives}, Hearts: {info['pc'].hearts}")
+    print(f"Position: ({info['pos'].x_global}, {info['pos'].y_global})")
 
     if terminated or truncated:
         obs, info = env.reset()
@@ -55,7 +55,7 @@ for _ in range(1000):
 env.close()
 ```
 
-### Initialization Modes
+### Initialisation Modes
 
 ```python
 from smb2_gym.app import InitConfig
@@ -73,7 +73,67 @@ config = InitConfig(
 )
 ```
 
-### Custom Reward Function
+### Info Dict Structure
+
+The `info` dict uses accessor objects for organized access to game state:
+
+```python
+# Player Character state
+info['pc'].lives
+info['pc'].hearts
+info['pc'].cherries
+info['pc'].character  # 0=Mario, 1=Luigi, 2=Peach, 3=Toad
+
+# Position
+info['pos'].x_global
+info['pos'].y_global
+info['pos'].x_local
+info['pos'].y_local
+
+# Game state
+info['game'].world
+info['game'].level
+info['game'].is_game_over
+
+# Enemies/Objects/Projectiles (all sprites: enemies, items, projectiles, doors, etc.)
+for enemy in info['enemies']:
+    if enemy.is_visible:
+        enemy.object_type   # EnemyId enum (SHYGUY_RED, BULLET, HEART, MUSHROOM, etc.)
+        enemy.global_x
+        enemy.global_y
+        enemy.health
+        enemy.x_velocity
+        enemy.y_velocity
+
+# Semantic tile map (15x16 structured array)
+info['semantic']
+```
+
+### Semantic Tile Map
+
+The environment provides a semantic tile map representing the game world around the player as a structured 15x16 numpy array:
+
+```python
+semantic_map = info['semantic']
+
+# Access tile information
+for row in range(15):
+    for col in range(16):
+        tile = semantic_map[row, col]
+
+        tile_id = tile['tile_id']        # Raw BackgroundTile ID
+        fine_type = tile['fine_type']    # Fine-grained FineTileType (SOLID, CLIMBABLE, etc.)
+        coarse_type = tile['coarse_type'] # Coarse-grained CoarseTileType (TERRAIN, HAZARD, etc.)
+
+        # RGB colour for visualisation
+        r, g, b = tile['color_r'], tile['color_g'], tile['color_b']
+```
+
+The semantic map provides a structured representation of the visible game world, useful for pathfinding, collision avoidance, and spatial reasoning in RL agents.
+
+**Note:** There is a plan to extend the semantic map or create a separate `collision_map` which has the collision properties for more detailed physical interaction information.
+
+### Example Custom Reward Function
 
 ```python
 from smb2_gym import SuperMarioBros2Env
@@ -84,13 +144,13 @@ class CustomSMB2Env(SuperMarioBros2Env):
         obs, reward, terminated, truncated, info = super().step(action)
 
         # Custom reward based on x-position progress
-        reward = info['x_pos_global'] / 100.0
+        reward = info['pos'].x_global / 100.0
 
         # Bonus for collecting cherries
-        reward += info['cherries'] * 10
+        reward += info['pc'].cherries * 10
 
         # Bonus for hearts
-        reward += info['hearts'] * 5
+        reward += info['pc'].hearts * 5
 
         # Penalty for losing a life
         if info.get('life_lost'):
@@ -98,29 +158,25 @@ class CustomSMB2Env(SuperMarioBros2Env):
 
         return obs, reward, terminated, truncated, info
 
-# Usage
 config = InitConfig(level="1-1", character="luigi")
 env = CustomSMB2Env(init_config=config, action_type="simple")
 ```
 
 ## Play as Human
 
-The package includes a human-playable interface with multiple initialization modes:
+The package includes a human-playable interface with multiple initialisation modes:
 
 ### Character/Level Mode (Default)
 ```bash
-# Play as Luigi on level 1-1
 smb2-play --level 1-1 --char luigi --scale 3
 
-# TODO: Yet to implement all levels states
-# Play as Peach on level 2-3
 smb2-play --level 2-3 --char peach 
 ```
 
 ### Built-in ROM Variant Mode
 ```bash
 # Use specific ROM variant with save state
-smb2-play --rom prg0_edited --save-state easy_combined_curriculum.sav
+smb2-play --rom prg0_edited --save-state /path/to/save.sav
 ```
 
 ### Custom ROM Mode  
@@ -146,11 +202,6 @@ smb2-play --custom-rom /path/to/smb2.nes --no-save-state
 - P: Pause
 - R: Reset
 - ESC: Quit
-
-**Alternative Controls:**
-- WASD: Move
-- J: A button
-- K: B button
 
 **Save States:**
 - F5: Save state
@@ -178,36 +229,11 @@ smb2-play --custom-rom /path/to/smb2.nes --no-save-state
 
 This project is for educational and research purposes only. Users must provide their own legally obtained ROM files.
 
-### Debugging
+## Acknowledgements
 
-The repository includes `play_collision_debug.py` for visualizing the collision map alongside gameplay.
+This project builds upon invaluable reverse-engineering work from the SMB2 community:
 
-**Running the debug script:**
-```bash
-python play_collision_debug.py
-```
+- **[Xkeeper's SMB2 Disassembly](https://xkeeper0.github.io/smb2/)** - Comprehensive disassembly and documentation of Super Mario Bros 2's code and mechanics
+- **[Data Crystal SMB2 RAM Map](https://datacrystal.tcrf.net/wiki/Super_Mario_Bros._2_(NES)/RAM_map)** - Detailed RAM address mappings and game state documentation
 
-**VS Code launch.json configuration:**
-```json
-{
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Python: Collision Debug",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/play_collision_debug.py",
-            "console": "integratedTerminal",
-            "justMyCode": false
-        }
-    ]
-}
-```
-
-The debug view shows:
-- Left panel: Game screen
-- Right panel: Collision map with tile types color-coded
-- Player position indicated with red-outlined white circle
-- Legend showing tile type colors
-
-
+These resources were essential for understanding the game's internals and implementing the state tracking features in this library.

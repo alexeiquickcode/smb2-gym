@@ -4,7 +4,12 @@ from abc import (
     ABC,
     abstractmethod,
 )
-from typing import Optional
+from typing import (
+    Optional,
+    Protocol,
+)
+
+from ..constants import Enemy
 
 
 class GameStateMixin(ABC):
@@ -14,50 +19,49 @@ class GameStateMixin(ABC):
     from the main environment class.
     """
 
-    @abstractmethod
-    def _read_ram_safe(self, address: int, default: int = 0) -> int:
-        """Safely read from RAM with fallback.
-
-        Args:
-            address: RAM address to read
-            default: Default value if RAM reading is not available
-
-        Returns:
-            Value at RAM address or default
-        """
-        pass
-
-    @abstractmethod
-    def _get_y_position(self, address: int) -> int:
-        """Safely read Y position from RAM and clamp to valid range.
-
-        Args:
-            address: RAM address to read Y position from
-
-        Returns:
-            Y position clamped to 0-239 range
-        """
-        pass
-
-    @abstractmethod
-    def _read_ppu(self, address: int, default: int = 0) -> int:
-        """Safely read from PPU memory with fallback.
-
-        Args:
-            address: PPU address to read (0x0000-0x3FFF)
-            default: Default value if PPU reading is not available
-
-        Returns:
-            Value at PPU address or default
-        """
-        pass
-
     # Attributes that mixins expect to exist
-    # These are typically set in _init_state_tracking() in the main class
     AREA_TRANSITION_FRAMES: int
+
+    # Tracking variables
     _previous_sub_area: Optional[int]
     _previous_x_global: Optional[int]
     _previous_y_global: Optional[int]
     _transition_frame_count: int
     _previous_levels_finished: Optional[dict[str, int]]
 
+    @abstractmethod
+    def _read_ram_safe(self, address: int) -> int:
+        """Read from RAM.
+
+        Args:
+            address: RAM address to read
+
+        Returns:
+            Value at RAM address
+        """
+        pass
+
+    @abstractmethod
+    def _read_ppu(self, address: int) -> int:
+        """Read from PPU memory.
+
+        Args:
+            address: PPU address to read (0x0000-0x3FFF)
+
+        Returns:
+            Value at PPU address
+        """
+        pass
+
+
+class HasEnemies(Protocol):
+    """Protocol for classes that provide enemy tracking.
+
+    This protocol defines the interface that SemanticMapMixin expects
+    to be provided by EnemiesMixin.
+    """
+
+    @property
+    def enemies(self) -> list[Enemy]:
+        """Get all enemy slots with their current runtime data."""
+        ...
