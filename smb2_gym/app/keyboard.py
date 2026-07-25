@@ -4,6 +4,7 @@ import pygame
 
 from ..actions import actions_to_buttons
 
+
 KEYBOARD_MAPPING = {
     pygame.K_RIGHT: 'right',
     pygame.K_LEFT: 'left',
@@ -27,9 +28,8 @@ def get_action_from_keyboard() -> int:
 
     # Check keyboard mappings
     for key, action in KEYBOARD_MAPPING.items():
-        if keys[key]:
-            if action not in keys_pressed:
-                keys_pressed.append(action)
+        if keys[key] and action not in keys_pressed:
+            keys_pressed.append(action)
 
     # Convert to button states
     buttons = actions_to_buttons(keys_pressed)

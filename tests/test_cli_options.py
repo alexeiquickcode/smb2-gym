@@ -27,6 +27,7 @@ def test_cli_help_shows_all_options(cli_command):
 def test_package_can_be_imported():
     """Test that the smb2_gym package can be imported."""
     import smb2_gym
+
     assert smb2_gym is not None
 
 

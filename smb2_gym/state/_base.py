@@ -5,7 +5,6 @@ from abc import (
     abstractmethod,
 )
 from typing import (
-    Optional,
     Protocol,
 )
 
@@ -23,11 +22,11 @@ class GameStateMixin(ABC):
     AREA_TRANSITION_FRAMES: int
 
     # Tracking variables
-    _previous_sub_area: Optional[int]
-    _previous_x_global: Optional[int]
-    _previous_y_global: Optional[int]
+    _previous_sub_area: int | None
+    _previous_x_global: int | None
+    _previous_y_global: int | None
     _transition_frame_count: int
-    _previous_levels_finished: Optional[dict[str, int]]
+    _previous_levels_finished: dict[str, int] | None
 
     @abstractmethod
     def _read_ram_safe(self, address: int) -> int:

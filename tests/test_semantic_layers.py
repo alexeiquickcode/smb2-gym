@@ -128,8 +128,9 @@ def test_tensor_terrain_layer_is_one_hot(live_env):
         tensor = live_env.semantic_tensor
         terrain_sum = tensor[:, :, TERRAIN_CHANNELS].sum(axis=2)
 
-        assert (terrain_sum == 1).all(
-        ), (f"terrain must be one-hot, found counts {sorted(set(terrain_sum.flatten().tolist()))}")
+        assert (terrain_sum == 1).all(), (
+            f"terrain must be one-hot, found counts {sorted(set(terrain_sum.flatten().tolist()))}"
+        )
 
 
 def test_tensor_object_layer_is_at_most_one_hot(live_env):
@@ -171,18 +172,19 @@ def test_tensor_matches_the_structured_map(live_env):
         if layer == 'terrain':
             expected = semantic_map['coarse_type'] == coarse_type
         else:
-            expected = (
-                (semantic_map['object_id'] != NO_OBJECT) &
-                (semantic_map['object_coarse_type'] == coarse_type)
+            expected = (semantic_map['object_id'] != NO_OBJECT) & (
+                semantic_map['object_coarse_type'] == coarse_type
             )
-        assert (tensor[:, :, channel] == expected.astype(np.uint8)).all(
-        ), (f"channel {channel} ({COARSE_TENSOR_CHANNEL_NAMES[channel]}) disagrees with the map")
+        assert (tensor[:, :, channel] == expected.astype(np.uint8)).all(), (
+            f"channel {channel} ({COARSE_TENSOR_CHANNEL_NAMES[channel]}) disagrees with the map"
+        )
 
 
 def test_channel_names_match_channel_count():
     """Names and channels stay in step."""
-    assert len(COARSE_TENSOR_CHANNEL_NAMES
-              ) == (len(COARSE_TENSOR_CHANNELS) + len(PROPERTY_CHANNEL_NAMES))
+    assert len(COARSE_TENSOR_CHANNEL_NAMES) == (
+        len(COARSE_TENSOR_CHANNELS) + len(PROPERTY_CHANNEL_NAMES)
+    )
     assert COARSE_TENSOR_CHANNEL_NAMES[0].startswith('terrain:')
     assert any(name.startswith('object:') for name in COARSE_TENSOR_CHANNEL_NAMES)
 

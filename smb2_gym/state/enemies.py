@@ -46,7 +46,7 @@ class EnemiesMixin(GameStateMixin):
                         direction=None,
                         collision=None,
                         object_timer=None,
-                        sprite_flags=None
+                        sprite_flags=None,
                     )
                 )
             else:
@@ -74,7 +74,7 @@ class EnemiesMixin(GameStateMixin):
                     direction=self._read_ram_safe(slot.direction),
                     collision=self._read_ram_safe(slot.collision),
                     object_timer=self._read_ram_safe(slot.object_timer),
-                    sprite_flags=self._read_ram_safe(slot.sprite_flags)
+                    sprite_flags=self._read_ram_safe(slot.sprite_flags),
                 )
                 enemies_data.append(enemy)
         return enemies_data

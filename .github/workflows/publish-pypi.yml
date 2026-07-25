@@ -5,17 +5,45 @@ on:
   push:
     branches:
       - staging
-      - main 
+      - main
+
+env:
+  SDL_VIDEODRIVER: dummy
+  SDL_AUDIODRIVER: dummy
 
 jobs:
+  # A version can only be uploaded to PyPI once, so a broken release cannot be
+  # replaced - only yanked and superseded. Everything is verified before upload.
+  verify:
+    name: Verify before publishing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: true
+          python-version: '3.12'
+
+      - name: Install project
+        run: uv sync --locked --extra dev
+
+      - name: Lint and format
+        run: uvx pre-commit run --all-files --show-diff-on-failure
+
+      - name: Run full test suite
+        run: uv run pytest -q
+
   build-and-publish:
+    needs: verify
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: '3.x'
 
@@ -26,6 +54,9 @@ jobs:
 
     - name: Build package
       run: python -m build
+
+    - name: Check distribution metadata
+      run: python -m twine check dist/*
 
     - name: Publish to Test PyPI
       if: github.ref == 'refs/heads/staging'

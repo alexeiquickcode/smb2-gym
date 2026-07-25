@@ -5,7 +5,7 @@ Detailed RAM map available at:
 
 https://datacrystal.tcrf.net/wiki/Super_Mario_Bros._2_(NES)/RAM_map
 
-or 
+or
 
 https://github.com/Xkeeper0/smb2/blob/master/src/ram.asm
 
@@ -14,6 +14,7 @@ NOTE: Some fields in these classes do not directly align with the above referenc
 
 from dataclasses import dataclass
 from enum import IntEnum
+
 
 # ------------------------------------------------------------------------------
 # ---- Main RAM Properties -----------------------------------------------------
@@ -47,6 +48,7 @@ class GlobalCoordinate:
         coord = GlobalCoordinate(area=1, sub_area=0, global_x=1024, global_y=192)
         # Represents area 1, sub-area 0, position (1024, 192)
     """
+
     area: int
     sub_area: int
     global_x: int
@@ -55,9 +57,8 @@ class GlobalCoordinate:
 
 @dataclass
 class EnemySlot:
-    """RAM addresses for a single object slot.
+    """RAM addresses for a single object slot."""
 
-    """
     slot_number: int  # 0-8
     x_position: int  # ObjectXLo
     y_position: int  # ObjectYLo
@@ -77,6 +78,7 @@ class EnemySlot:
 @dataclass
 class Enemy:
     """Runtime data for a single enemy/object slot with computed properties."""
+
     slot_number: int
     x_position: int | None  # Local X on current page
     y_position: int | None  # Local Y (inverted: y=0 at bottom)
@@ -135,6 +137,7 @@ class Enemy:
 @dataclass
 class Player:
     """Player RAM addresses."""
+
     X_PAGE: int = 0x0014
     X_POSITION: int = 0x0028
     Y_PAGE: int = 0x001E
@@ -162,19 +165,29 @@ class Player:
 @dataclass
 class Timers:
     """Timer RAM addresses."""
+
     FRAMERULE: int = 0x0010
     INVULNERABILITY: int = 0x0085
     STARMAN: int = 0x04E0
     SUBSPACE: int = 0x04B7
     DOOR_TRANSITION: int = 0x04BD
     STOPWATCH: int = 0x04FF
-    FLOAT: int = 0x0553
-    PIDGET_CARPET: int = 0x008E
+    # Peach's float, which needs two addresses that are easy to confuse:
+    #   FLOAT       counts down 60 -> 0 while she is actually floating
+    #   FLOAT_LENGTH is the static budget (60 for her, 0 for everyone else)
+    # Reading FLOAT_LENGTH as "the timer" shows a meter pinned at 60/60 forever.
+    FLOAT: int = 0x04C9
+    FLOAT_LENGTH: int = 0x0553
+    # Time left on Pidgit's magic carpet. Was previously read from $008E, which
+    # is not this timer: Data Crystal documents $008E as the Bomb 3 fuse and
+    # Xkeeper's disassembly labels it FreeSubconsCorkCounter.
+    PIDGIT_CARPET: int = 0x00B9
 
 
 @dataclass
 class GameState:
     """Game state RAM addresses."""
+
     CHARACTER: int = 0x008F
     CURRENT_LEVEL: int = 0x0531
     WORLD_NUMBER: int = 0x0635
@@ -192,6 +205,7 @@ class GameState:
 @dataclass
 class Viewport:
     """Viewport and camera position RAM addresses."""
+
     SCREEN_BOUNDARY_LEFT_HI: int = 0x04BE  # High byte of left screen boundary (page)
     SCREEN_BOUNDARY_LEFT_LO: int = 0x04BF  # Low byte of left screen boundary (offset)
     SCREEN_Y_HI: int = 0x00CA  # High byte of vertical screen position
@@ -200,6 +214,9 @@ class Viewport:
     PPU_SCROLL_Y_MIRROR: int = 0x00FC  # Vertical scroll position (within nametable)
 
 
+# The address of each field steps by one across the nine slots, so the
+# columns are aligned by hand to make a wrong address visible at a glance.
+# fmt: off
 ENEMY_SLOTS = [ \
     EnemySlot(slot_number=0, x_position=0x0029, y_position=0x0033, x_page=0x0015, y_page=0x001F, object_type=0x0090, health=0x0465, state=0x0051, x_velocity=0x003D, y_velocity=0x0047, direction=0x006F, collision=0x005B, object_timer=0x0086, sprite_flags=0x046E),
     EnemySlot(slot_number=1, x_position=0x002A, y_position=0x0034, x_page=0x0016, y_page=0x0020, object_type=0x0091, health=0x0466, state=0x0052, x_velocity=0x003E, y_velocity=0x0048, direction=0x0070, collision=0x005C, object_timer=0x0087, sprite_flags=0x046F),
@@ -211,6 +228,7 @@ ENEMY_SLOTS = [ \
     EnemySlot(slot_number=7, x_position=0x0030, y_position=0x003A, x_page=0x001C, y_page=0x0026, object_type=0x0097, health=0x046C, state=0x0058, x_velocity=0x0044, y_velocity=0x004E, direction=0x0076, collision=0x0062, object_timer=0x008D, sprite_flags=0x0475),
     EnemySlot(slot_number=8, x_position=0x0031, y_position=0x003B, x_page=0x001D, y_page=0x0027, object_type=0x0098, health=0x046D, state=0x0059, x_velocity=0x0045, y_velocity=0x004F, direction=0x0077, collision=0x0063, object_timer=0x0086, sprite_flags=0x046E), # NOTE: ?? timer 8, shares sprite_flags with slot 0
               ]
+# fmt: on
 
 # ------------------------------------------------------------------------------
 # ---- Display/Rendering/Controls ----------------------------------------------
@@ -219,6 +237,7 @@ ENEMY_SLOTS = [ \
 
 class Buttons(IntEnum):
     """NES controller button indices."""
+
     A = 0
     B = 1
     SELECT = 2
@@ -312,7 +331,7 @@ LEVEL_NAMES = {
     0x10: "6-2",
     0x11: "6-3",
     0x12: "7-1",
-    0x13: "7-2"
+    0x13: "7-2",
 }
 
 # ------------------------------------------------------------------------------

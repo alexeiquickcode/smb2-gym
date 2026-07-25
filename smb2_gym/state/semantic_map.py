@@ -1,7 +1,10 @@
 """Semantic tile map for SMB2 environment."""
 
 import warnings
-from typing import Any
+from collections.abc import Sequence
+from typing import (
+    Any,
+)
 
 import numpy as np
 from numpy.typing import NDArray
@@ -42,6 +45,7 @@ from ..constants.semantic import (
     OBJECT_ID_MAPPING,
     PROPERTY_CHANNEL_NAMES,
     SEMANTIC_TILE_DTYPE,
+    SINGLE_TILE_FINE_TYPES,
     TILE_ID_MAPPING,
     UNMAPPED_OBJECT_FINE_TYPE,
     FineTileType,
@@ -50,6 +54,28 @@ from ._base import (
     GameStateMixin,
     HasEnemies,
 )
+
+
+def _is_nearer_other_object(
+    sprite_x: int,
+    sprite_y: int,
+    anchor_x: int,
+    anchor_y: int,
+    other_anchors: Sequence[tuple[int, int]],
+) -> bool:
+    """Whether an OAM sprite sits closer to another object than to this one.
+
+    Distances are measured to the anchor (an object's top-left), with Y weighted
+    the same as X. Ties favour the object being measured, so a sprite exactly
+    between two objects is not dropped from both.
+
+    This alone cannot separate objects whose anchors nearly coincide -- a Cobrat
+    and the bullet it just spat sit 6px apart, so every nearby sprite is
+    "nearest" to both. The anchor-relative bound in `_measure_object_size`
+    handles that case; this handles objects that are merely adjacent.
+    """
+    own = (sprite_x - anchor_x) ** 2 + (sprite_y - anchor_y) ** 2
+    return any((sprite_x - ox) ** 2 + (sprite_y - oy) ** 2 < own for ox, oy in other_anchors)
 
 
 class SemanticMapMixin(GameStateMixin, HasEnemies):
@@ -346,7 +372,12 @@ class SemanticMapMixin(GameStateMixin, HasEnemies):
 
         return enemy_positions
 
-    def _measure_object_size(self, screen_x: int, screen_y: int) -> tuple[int, int]:
+    def _measure_object_size(
+        self,
+        screen_x: int,
+        screen_y: int,
+        other_anchors: Sequence[tuple[int, int]] | None = None,
+    ) -> tuple[int, int]:
         """Measure a sprite object's size in tiles from the OAM entries drawing it.
 
         The game does not expose object dimensions in RAM -- the only size-related
@@ -358,6 +389,9 @@ class SemanticMapMixin(GameStateMixin, HasEnemies):
         Args:
             screen_x: Object's left edge in screen pixels
             screen_y: Object's top edge in screen pixels
+            other_anchors: Screen positions of the other on-screen objects. Sprites
+                nearer one of these than to this object are excluded, so two
+                objects standing close together do not merge into one footprint.
 
         Returns:
             tuple of (width_tiles, height_tiles), at least 1x1
@@ -387,8 +421,28 @@ class SemanticMapMixin(GameStateMixin, HasEnemies):
             if not -TILE_SIZE < (sprite_top - screen_y) < OBJECT_SPRITE_MAX_HEIGHT:
                 continue
 
+            # A sprite drawn nearer another object belongs to that object. Without
+            # this, two objects close together chain into a single cluster and both
+            # report the combined extent -- a Cobrat in its jar beside the bullet it
+            # spat made an 8px bullet measure four tiles tall.
+            if other_anchors and _is_nearer_other_object(
+                oam_x, sprite_top, screen_x, screen_y, other_anchors
+            ):
+                continue
+
             candidates.append((oam_x, sprite_top))
 
+        if not candidates:
+            return 1, 1
+
+        # An object's anchor is its top-left, so its own sprites start at the
+        # anchor row and continue downward. Sprites above that row belong to
+        # something else -- an object stacked overhead, whose sprites would
+        # otherwise chain down into this cluster and inflate it. The tolerance is
+        # deliberately under one sprite row: it absorbs the few pixels of
+        # anchor/draw jitter without reaching the row above.
+        top_limit = screen_y - OAM_SPRITE_HEIGHT // 2
+        candidates = [c for c in candidates if c[1] >= top_limit]
         if not candidates:
             return 1, 1
 
@@ -403,9 +457,8 @@ class SemanticMapMixin(GameStateMixin, HasEnemies):
             grew = False
             for candidate in list(remaining):
                 if any(
-                    abs(candidate[0]
-                        - member[0]) <= OAM_SPRITE_WIDTH and abs(candidate[1]
-                                                                 - member[1]) <= OAM_SPRITE_HEIGHT
+                    abs(candidate[0] - member[0]) <= OAM_SPRITE_WIDTH
+                    and abs(candidate[1] - member[1]) <= OAM_SPRITE_HEIGHT
                     for member in cluster
                 ):
                     cluster.append(candidate)
@@ -450,7 +503,23 @@ class SemanticMapMixin(GameStateMixin, HasEnemies):
         property_map = np.zeros((*shape, 2), dtype=np.uint8)
         velocity_map = np.zeros((*shape, 2), dtype=np.float32)
 
-        for x_pixel, y_pixel, enemy in self._get_visible_objects():
+        visible = self._get_visible_objects()
+
+        # Two objects can land in the same cell -- a Cobrat and the bullet it just
+        # spat sit 6px apart, well inside one 16px tile. Only one survives, so
+        # write the small transient types first and let the substantial object
+        # overwrite them: an agent needs to see the Cobrat more than its bullet.
+        visible = sorted(
+            visible,
+            key=lambda item: (
+                OBJECT_ID_MAPPING.get(item[2].object_type, UNMAPPED_OBJECT_FINE_TYPE)
+                not in SINGLE_TILE_FINE_TYPES
+            ),
+        )
+
+        for index, (x_pixel, y_pixel, enemy) in enumerate(visible):
+            # Every other on-screen object, so sprite ownership can be resolved
+            other_anchors = [(ox, oy) for j, (ox, oy, _) in enumerate(visible) if j != index]
             object_id = enemy.object_type
             fine_type = OBJECT_ID_MAPPING.get(object_id, UNMAPPED_OBJECT_FINE_TYPE)
 
@@ -462,14 +531,18 @@ class SemanticMapMixin(GameStateMixin, HasEnemies):
             # The runtime UNLIFTABLE flag overrides the type-based guess: some
             # otherwise-liftable objects are pinned in place.
             flags = enemy.sprite_flags or 0
-            liftable = (fine_type in LIFTABLE_FINE_TYPES and not flags & SpriteFlags.UNLIFTABLE)
+            liftable = fine_type in LIFTABLE_FINE_TYPES and not flags & SpriteFlags.UNLIFTABLE
 
             velocity_x = np.clip((enemy.x_velocity or 0) / OBJECT_VELOCITY_SCALE, -1.0, 1.0)
             # Object Y velocity is in raw screen space (positive = downward). The
             # map's rows also increase downward, so no inversion is needed here.
             velocity_y = np.clip((enemy.y_velocity or 0) / OBJECT_VELOCITY_SCALE, -1.0, 1.0)
 
-            width, height = self._measure_object_size(x_pixel, y_pixel)
+            if fine_type in SINGLE_TILE_FINE_TYPES:
+                # Small by definition; measuring would inherit a neighbour's block
+                width, height = 1, 1
+            else:
+                width, height = self._measure_object_size(x_pixel, y_pixel, other_anchors)
 
             # The X is a left edge, centred the same way the player's is -- a
             # carried item shares its carrier's X and must land in its column.
@@ -516,9 +589,9 @@ class SemanticMapMixin(GameStateMixin, HasEnemies):
         viewport_y_hi = self._read_ram_safe(VIEWPORT.SCREEN_Y_HI)
         viewport_y_lo = self._read_ram_safe(VIEWPORT.SCREEN_Y_LO)
 
-        # Read PPU scroll positions for fine scrolling
+        # Read PPU scroll positions for fine scrolling. Only the X mirror is
+        # used: in vertical levels ScreenY already carries the fine offset.
         scroll_x = self._read_ram_safe(VIEWPORT.PPU_SCROLL_X_MIRROR)
-        scroll_y = self._read_ram_safe(VIEWPORT.PPU_SCROLL_Y_MIRROR)
 
         # Check scroll direction to determine scrolling type
         scroll_direction = self._read_ram_safe(GAME_STATE.SCROLL_DIRECTION)
@@ -561,7 +634,7 @@ class SemanticMapMixin(GameStateMixin, HasEnemies):
 
         # Check if in subspace (subspace_status == 2 means in subspace)
         subspace_status = self._read_ram_safe(GAME_STATE.SUBSPACE_STATUS)
-        in_subspace = (subspace_status == 2)
+        in_subspace = subspace_status == 2
 
         if in_subspace:
             # Subspace: read from dedicated subspace RAM region
@@ -580,7 +653,7 @@ class SemanticMapMixin(GameStateMixin, HasEnemies):
                             f"Unknown tile ID {tile_id} at subspace position ({x}, {y}), "
                             f"RAM address 0x{ram_address:04X}. Treating as EMPTY tile.",
                             RuntimeWarning,
-                            stacklevel=3
+                            stacklevel=3,
                         )
                         tile_type_map[y, x] = FineTileType.EMPTY
                     else:
@@ -637,7 +710,7 @@ class SemanticMapMixin(GameStateMixin, HasEnemies):
                         f"SRAM address 0x{sram_address:04X}, "
                         f"page {page_number}. Treating as EMPTY tile.",
                         RuntimeWarning,
-                        stacklevel=3
+                        stacklevel=3,
                     )
                     tile_type_map[y, x] = FineTileType.EMPTY
                 else:
@@ -732,8 +805,9 @@ class SemanticMapMixin(GameStateMixin, HasEnemies):
 
         tensor = np.zeros(
             (
-                semantic_map.shape[0], semantic_map.shape[1],
-                len(COARSE_TENSOR_CHANNELS) + len(PROPERTY_CHANNEL_NAMES)
+                semantic_map.shape[0],
+                semantic_map.shape[1],
+                len(COARSE_TENSOR_CHANNELS) + len(PROPERTY_CHANNEL_NAMES),
             ),
             dtype=np.uint8,
         )

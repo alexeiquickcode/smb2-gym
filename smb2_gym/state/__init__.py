@@ -5,9 +5,10 @@ from .player import PlayerStateMixin
 from .position import PositionMixin
 from .semantic_map import SemanticMapMixin
 
+
 __all__ = [
-    'SemanticMapMixin',
     'EnemiesMixin',
     'PlayerStateMixin',
     'PositionMixin',
+    'SemanticMapMixin',
 ]

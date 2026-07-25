@@ -34,9 +34,9 @@ def test_all_background_tiles_are_mapped():
         missing_details = []
         for tile_value in sorted(missing_tiles):
             # Find the enum name for this value
-            tile_name = [
+            tile_name = next(
                 name for name, val in BackgroundTile.__members__.items() if val == tile_value
-            ][0]
+            )
             missing_details.append(
                 f"  0x{tile_value:02X} ({tile_value:3d}): BackgroundTile.{tile_name}"
             )
@@ -49,9 +49,9 @@ def test_all_background_tiles_are_mapped():
         pytest.fail(error_msg)
 
     # Verify we have exactly 256 tiles (full uint8 range)
-    assert len(
-        all_tile_values
-    ) == 256, f"Expected 256 BackgroundTile values, got {len(all_tile_values)}"
+    assert len(all_tile_values) == 256, (
+        f"Expected 256 BackgroundTile values, got {len(all_tile_values)}"
+    )
     assert len(mapped_tile_ids) == 256, f"Expected 256 mapped tiles, got {len(mapped_tile_ids)}"
 
 
@@ -174,8 +174,12 @@ def test_non_hostile_objects_are_not_classified_as_enemies():
 def test_hostile_objects_stay_enemies():
     """ENEMY keeps its meaning: genuinely hostile things."""
     for object_id in (
-        EnemyId.SHYGUY_RED, EnemyId.BIRDO, EnemyId.MOUSER, EnemyId.PIDGIT, EnemyId.PHANTO,
-        EnemyId.WART
+        EnemyId.SHYGUY_RED,
+        EnemyId.BIRDO,
+        EnemyId.MOUSER,
+        EnemyId.PIDGIT,
+        EnemyId.PHANTO,
+        EnemyId.WART,
     ):
         assert OBJECT_ID_MAPPING[object_id] == FineTileType.ENEMY
 
@@ -187,10 +191,13 @@ def test_a_sprite_and_its_background_tile_agree():
     must not disagree.
     """
     assert OBJECT_ID_MAPPING[EnemyId.POW_BLOCK] == TILE_ID_MAPPING[BackgroundTile.POW_BLOCK]
-    assert OBJECT_ID_MAPPING[EnemyId.SUBSPACE_POTION] == TILE_ID_MAPPING[BackgroundTile.GRASS_POTION
-                                                                        ]
-    assert OBJECT_ID_MAPPING[EnemyId.VEGETABLE_LARGE
-                            ] == (TILE_ID_MAPPING[BackgroundTile.GRASS_LARGE_VEGGIE])
+    assert (
+        OBJECT_ID_MAPPING[EnemyId.SUBSPACE_POTION] == TILE_ID_MAPPING[BackgroundTile.GRASS_POTION]
+    )
+    assert (
+        OBJECT_ID_MAPPING[EnemyId.VEGETABLE_LARGE]
+        == (TILE_ID_MAPPING[BackgroundTile.GRASS_LARGE_VEGGIE])
+    )
 
 
 def test_every_fine_type_has_a_coarse_type_and_colour():

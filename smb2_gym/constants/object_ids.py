@@ -11,6 +11,7 @@ class CollisionFlags(IntFlag):
 
     Tracks runtime collision detection results (what type of collision occurred).
     """
+
     NONE = 0x00
     RIGHT = 0x01
     LEFT = 0x02
@@ -29,6 +30,7 @@ class SpriteFlags(IntFlag):
     Defines inherent sprite/enemy properties set at spawn time.
 
     """
+
     NONE = 0x00
     DAMAGE_FROM_ABOVE = 0x01  # Causes damage when touched from above
     UNLIFTABLE = 0x02  # Cannot be picked up by player
@@ -42,6 +44,7 @@ class SpriteFlags(IntFlag):
 
 class PlayerState(IntEnum):
     """Player state constants from SMB2."""
+
     NORMAL = 0x00
     CLIMBING = 0x01
     LIFTING = 0x02
@@ -55,6 +58,7 @@ class PlayerState(IntEnum):
 
 class EnemyState(IntEnum):
     """Enemy state values."""
+
     INVISIBLE = 0x00
     VISIBLE = 0x01
     DEAD = 0x02
@@ -65,6 +69,7 @@ class EnemyId(IntEnum):
 
     Reference: https://github.com/Xkeeper0/smb2
     """
+
     HEART = 0x00
     SHYGUY_RED = 0x01
     TWEETER = 0x02
@@ -197,6 +202,7 @@ class EnemyId(IntEnum):
 
 class BackgroundTile(IntEnum):
     """Background tile IDs from SMB2."""
+
     BLACK = 0x00
     BG_CLOUD_LEFT = 0x01
     BG_CLOUD_RIGHT = 0x02

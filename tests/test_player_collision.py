@@ -27,6 +27,7 @@ from smb2_gym.constants import (
     FineTileType,
 )
 
+
 ROM = "smb2_gym/_nes/prg0/super_mario_bros_2_prg0.nes"
 
 # Horizontal levels where the player starts big and can duck. Vertical levels
@@ -139,7 +140,7 @@ def test_ducking_keeps_feet_tile_and_drops_head_tile(grounded_env):
 
     ducking = grounded_env.get_player_collision_tiles()
 
-    assert ducking == [feet], (f"ducking should keep only the feet tile {feet}, got {ducking}")
+    assert ducking == [feet], f"ducking should keep only the feet tile {feet}, got {ducking}"
 
 
 def test_ducking_does_not_move_the_player(grounded_env):
@@ -214,7 +215,7 @@ def test_player_and_enemies_share_one_transform(grounded_env):
     Previously the player path added a +16 correction that the enemy path did
     not, putting the two in different frames of reference.
     """
-    for screen_x, screen_y, _enemy_id in grounded_env._get_enemy_screen_positions():
+    for _screen_x, screen_y, _enemy_id in grounded_env._get_enemy_screen_positions():
         assert 0 <= screen_y < SCREEN_TILES_HEIGHT * TILE_SIZE, (
             "enemy screen Y left the map, transform is inconsistent"
         )
@@ -234,10 +235,9 @@ def test_carried_item_shares_the_players_column(grounded_env):
         if not player_tiles:
             continue
 
-        world_x = (
-            grounded_env._read_ram_safe(PLAYER.X_PAGE) * PAGE_SIZE
-            + grounded_env._read_ram_safe(PLAYER.X_POSITION)
-        )
+        world_x = grounded_env._read_ram_safe(
+            PLAYER.X_PAGE
+        ) * PAGE_SIZE + grounded_env._read_ram_safe(PLAYER.X_POSITION)
         assert grounded_env._sprite_column(world_x) == player_tiles[0][0], (
             f"item at the player's X={world_x} (X%{TILE_SIZE}={world_x % TILE_SIZE}) "
             f"landed in a different column than the player"
@@ -298,8 +298,9 @@ def test_losing_a_life_halves_the_box_without_moving_the_player():
             env.step(NOOP)
 
         assert (env._read_ram_safe(PLAYER.LIFE_METER) >> 4) + 1 < hearts_before
-        assert env.get_player_collision_height(
-        ) == PLAYER_HEIGHT_SMALL, ("losing a life should halve the collision height")
+        assert env.get_player_collision_height() == PLAYER_HEIGHT_SMALL, (
+            "losing a life should halve the collision height"
+        )
 
         small_tiles = env.get_player_collision_tiles()
         assert len(small_tiles) == 1, f"a small player is one tile tall, got {small_tiles}"
@@ -307,8 +308,9 @@ def test_losing_a_life_halves_the_box_without_moving_the_player():
         assert small_tiles[0][1] == big_tiles[-1][1], (
             f"small player should keep the feet row {big_tiles[-1][1]}, got {small_tiles}"
         )
-        assert env._read_ram_safe(PLAYER.Y_POSITION
-                                 ) == big_y, ("shrinking must not move the player's RAM Y")
+        assert env._read_ram_safe(PLAYER.Y_POSITION) == big_y, (
+            "shrinking must not move the player's RAM Y"
+        )
     finally:
         env.close()
 
@@ -337,7 +339,7 @@ def test_landing_restores_the_grounded_box(grounded_env):
     """After a jump the player returns to exactly the tiles it started on."""
     before = grounded_env.get_player_collision_tiles()
 
-    for frame in range(20):
+    for _ in range(20):
         grounded_env.step(JUMP)
     for _ in range(90):
         grounded_env.step(NOOP)

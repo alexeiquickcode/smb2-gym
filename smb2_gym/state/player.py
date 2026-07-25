@@ -170,14 +170,31 @@ class PlayerStateMixin(GameStateMixin):
         return self._read_ram_safe(TIMERS.FRAMERULE)
 
     @property
+    def pidgit_carpet_timer(self) -> int:
+        """Get time left on Pidgit's magic carpet (0 when not riding one)."""
+        return self._read_ram_safe(TIMERS.PIDGIT_CARPET)
+
+    @property
     def pidget_carpet_timer(self) -> int:
-        """Get time left to use Pidget's carpet."""
-        return self._read_ram_safe(TIMERS.PIDGET_CARPET)
+        """Deprecated misspelling of `pidgit_carpet_timer`."""
+        return self.pidgit_carpet_timer
 
     @property
     def float_timer(self) -> int:
-        """Get Princess float timer (available float time, max 60 frames = 1 second)."""
+        """Get frames of float remaining, counting 60 -> 0 while Peach floats.
+
+        Reads 0 whenever she is not floating, and for every other character.
+        """
         return self._read_ram_safe(TIMERS.FLOAT)
+
+    @property
+    def float_length(self) -> int:
+        """Get Peach's total float budget in frames (60 for her, 0 for others).
+
+        A static per-character parameter (`JumpFloatLength` in the
+        disassembly), not a countdown - see `float_timer` for the live value.
+        """
+        return self._read_ram_safe(TIMERS.FLOAT_LENGTH)
 
     @property
     def door_transition_timer(self) -> int:

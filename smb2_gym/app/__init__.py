@@ -30,21 +30,21 @@ class InitConfig:
        - Load your own ROM file and optional save state
        - Example: InitConfig(rom_path="/path/to/rom.nes", save_state_path="/path/to/save.sav")
 
-    Note: The CLI supports additional syntax like --rom prg0_edited for built-in 
+    Note: The CLI supports additional syntax like --rom prg0_edited for built-in
     ROM variants, which gets converted to custom ROM paths internally.
     """
 
     def __init__(
         self,
-        level: Optional[str] = None,
-        character: Optional[Union[str, int]] = None,
-        rom_path: Optional[str] = None,
-        save_state_path: Optional[str] = None,
+        level: str | None = None,
+        character: str | int | None = None,
+        rom_path: str | None = None,
+        save_state_path: str | None = None,
     ):
         """Initialize configuration.
 
         Args:
-            level: Level to play (e.g., "1-1", "7-2") 
+            level: Level to play (e.g., "1-1", "7-2")
             character: Character to play as (name or ID)
             rom_path: Path to custom ROM file
             save_state_path: Path to save state file (optional)
@@ -96,7 +96,7 @@ class InitConfig:
             rom_path = os.path.join(base_dir, '_nes', 'prg0', 'super_mario_bros_2_prg0.nes')
             return os.path.abspath(rom_path)
 
-    def get_save_state_path(self) -> Optional[str]:
+    def get_save_state_path(self) -> str | None:
         """Get save state file path."""
         if self.save_state_path:
             if not os.path.exists(self.save_state_path):
@@ -127,6 +127,20 @@ class InitConfig:
 
 __all__ = [
     'InitConfig',
+    'PlayUI',
     'create_info_panel',
     'get_required_info_height',
 ]
+
+
+def __getattr__(name: str):
+    """Lazily expose the play UI.
+
+    `PlayUI` pulls in pygame display code and the env module, which callers that
+    only want `InitConfig` shouldn't have to import.
+    """
+    if name == 'PlayUI':
+        from .play_display import PlayUI
+
+        return PlayUI
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

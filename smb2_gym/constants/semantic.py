@@ -25,6 +25,7 @@ class CoarseTileType(IntEnum):
     These categories provide high-level semantic groupings that help
     RL agents learn general behaviors (e.g., 'avoid ENEMY', 'pick up PICKABLE').
     """
+
     EMPTY = 0  # Air/background
     TERRAIN = 1  # Static environment geometry
     INTERACTIVE = 2  # Things you can enter/activate
@@ -40,6 +41,7 @@ class FineTileType(IntEnum):
     These provide detailed semantic information while maintaining hierarchical
     structure through CoarseTileType. Designed for RL agent observation space.
     """
+
     # EMPTY category
     EMPTY = 0
 
@@ -85,40 +87,32 @@ class FineTileType(IntEnum):
 
 # RGB colours for tile types
 TILE_COLORS: dict[FineTileType, tuple[int, int, int]] = {
-
     # EMPTY
     FineTileType.EMPTY: (200, 200, 200),  # light gray
-
     # TERRAIN - browns/tans for ground
     FineTileType.SOLID: (101, 67, 33),  # brown
     FineTileType.PLATFORM: (139, 69, 19),  # saddle brown
     FineTileType.CLIMBABLE: (34, 139, 34),  # forest green
-
     # INTERACTIVE - gold for entrances
     FineTileType.DOOR: (255, 215, 0),  # gold
     FineTileType.JAR: (255, 215, 0),  # gold
-
     # PICKABLE - distinct colours for each type
     FineTileType.VEGETABLE: (50, 205, 50),  # lime green
     FineTileType.BOMB: (128, 0, 0),  # maroon
     FineTileType.POW_BLOCK: (255, 255, 224),  # light yellow
     FineTileType.KEY: (255, 215, 0),  # gold
-
     # COLLECTIBLE - bright colours
     FineTileType.CHERRY: (255, 20, 147),  # deep pink
     FineTileType.POTION: (186, 85, 211),  # medium orchid
     FineTileType.MUSHROOM: (255, 140, 0),  # dark orange
-
     # ENEMY - red for threats
     FineTileType.ENEMY: (255, 0, 0),  # red
     FineTileType.PROJECTILE: (255, 99, 71),  # tomato - hostile but not defeatable
-
     # HAZARD - reds/oranges for danger
     FineTileType.SPIKES: (220, 20, 60),  # crimson
     FineTileType.QUICKSAND: (244, 164, 96),  # sandy brown
     FineTileType.CONVEYOR_LEFT: (105, 105, 105),  # dim gray
     FineTileType.CONVEYOR_RIGHT: (105, 105, 105),  # dim gray
-
     # Sprite-only types
     FineTileType.COIN: (255, 223, 0),  # golden yellow
     FineTileType.HEART: (255, 105, 180),  # hot pink
@@ -236,16 +230,13 @@ RENDER_PRIORITY: tuple[CoarseTileType, ...] = (
 # fine-grained -> to coarse-grained
 FINE_TO_COARSE_MAPPING: dict[FineTileType, CoarseTileType] = {
     FineTileType.EMPTY: CoarseTileType.EMPTY,
-
     # TERRAIN
     FineTileType.SOLID: CoarseTileType.TERRAIN,
     FineTileType.PLATFORM: CoarseTileType.TERRAIN,
     FineTileType.CLIMBABLE: CoarseTileType.TERRAIN,
-
     # INTERACTIVE
     FineTileType.DOOR: CoarseTileType.INTERACTIVE,
     FineTileType.JAR: CoarseTileType.INTERACTIVE,
-
     # PICKABLE
     FineTileType.VEGETABLE: CoarseTileType.PICKABLE,
     FineTileType.BOMB: CoarseTileType.PICKABLE,
@@ -254,17 +245,14 @@ FINE_TO_COARSE_MAPPING: dict[FineTileType, CoarseTileType] = {
     FineTileType.POTION: CoarseTileType.PICKABLE,
     FineTileType.MUSHROOM: CoarseTileType.PICKABLE,
     FineTileType.SHELL: CoarseTileType.PICKABLE,
-
     # COLLECTIBLE
     FineTileType.CHERRY: CoarseTileType.COLLECTIBLE,
     FineTileType.COIN: CoarseTileType.COLLECTIBLE,
     FineTileType.HEART: CoarseTileType.COLLECTIBLE,
     FineTileType.POWERUP: CoarseTileType.COLLECTIBLE,
-
     # ENEMY
     FineTileType.ENEMY: CoarseTileType.ENEMY,
     FineTileType.PROJECTILE: CoarseTileType.ENEMY,
-
     # HAZARD
     FineTileType.SPIKES: CoarseTileType.HAZARD,
     FineTileType.QUICKSAND: CoarseTileType.HAZARD,
@@ -278,7 +266,7 @@ for fine_type, coarse_type in FINE_TO_COARSE_MAPPING.items():
         COLOR_LOOKUP[fine_type] = TILE_COLORS[fine_type]
 
 # Mapping from raw BackgroundTile IDs to semantic FineTileType
-TILE_ID_MAPPING: dict[int, FineTileType] = { \
+TILE_ID_MAPPING: dict[int, FineTileType] = {
     BackgroundTile.BLACK: FineTileType.EMPTY,
     BackgroundTile.SKY: FineTileType.EMPTY,
     BackgroundTile.BG_CLOUD_LEFT: FineTileType.EMPTY,
@@ -287,7 +275,6 @@ TILE_ID_MAPPING: dict[int, FineTileType] = { \
     BackgroundTile.STAR_BG_1: FineTileType.EMPTY,
     BackgroundTile.STAR_BG_2: FineTileType.EMPTY,
     BackgroundTile.BACKGROUND_BRICK: FineTileType.EMPTY,
-
     # Decorative background elements (non-interactive)
     BackgroundTile.WATERFALL_TOP: FineTileType.EMPTY,
     BackgroundTile.WATERFALL: FineTileType.EMPTY,
@@ -319,7 +306,6 @@ TILE_ID_MAPPING: dict[int, FineTileType] = { \
     BackgroundTile.HORN_TOP_RIGHT: FineTileType.EMPTY,
     BackgroundTile.HORN_BOTTOM_LEFT: FineTileType.EMPTY,
     BackgroundTile.HORN_BOTTOM_RIGHT: FineTileType.EMPTY,
-
     # Solid ground/wall tiles
     BackgroundTile.SOLID_GRASS: FineTileType.SOLID,
     BackgroundTile.SOLID_SAND: FineTileType.SOLID,
@@ -382,7 +368,6 @@ TILE_ID_MAPPING: dict[int, FineTileType] = { \
     BackgroundTile.BOMBABLE_BRICK: FineTileType.SOLID,
     BackgroundTile.TILE_98: FineTileType.SOLID,
     BackgroundTile.TILE_9A: FineTileType.SOLID,
-
     # Door tiles
     BackgroundTile.DOOR_TOP: FineTileType.DOOR,
     BackgroundTile.DOOR_BOTTOM_LOCK: FineTileType.DOOR,
@@ -391,7 +376,6 @@ TILE_ID_MAPPING: dict[int, FineTileType] = { \
     BackgroundTile.LIGHT_DOOR: FineTileType.DOOR,
     BackgroundTile.LIGHT_DOOR_END_LEVEL: FineTileType.DOOR,
     BackgroundTile.DARK_DOOR: FineTileType.DOOR,
-
     # Climbable tiles (vines, ladders, chains)
     BackgroundTile.VINE_TOP: FineTileType.CLIMBABLE,
     BackgroundTile.VINE: FineTileType.CLIMBABLE,
@@ -404,7 +388,6 @@ TILE_ID_MAPPING: dict[int, FineTileType] = { \
     BackgroundTile.LADDER_SHADOW: FineTileType.CLIMBABLE,
     BackgroundTile.LADDER_STANDABLE_SHADOW: FineTileType.CLIMBABLE,
     BackgroundTile.CLIMBABLE_SKY: FineTileType.CLIMBABLE,
-
     # Platform tiles (jump-through)
     BackgroundTile.JUMP_THROUGH_BLOCK: FineTileType.PLATFORM,
     BackgroundTile.JUMP_THROUGH_ICE: FineTileType.PLATFORM,
@@ -413,34 +396,27 @@ TILE_ID_MAPPING: dict[int, FineTileType] = { \
     BackgroundTile.JUMPTHROUGH_SAND_BLOCK: FineTileType.PLATFORM,
     BackgroundTile.JUMPTHROUGH_BRICK: FineTileType.PLATFORM,
     BackgroundTile.JUMPTHROUGH_SAND: FineTileType.PLATFORM,
-
     # Spikes
     BackgroundTile.SPIKES: FineTileType.SPIKES,
-
     # Quicksand
     BackgroundTile.QUICKSAND_FAST: FineTileType.QUICKSAND,
     BackgroundTile.QUICKSAND_SLOW: FineTileType.QUICKSAND,
     BackgroundTile.DIGGABLE_SAND: FineTileType.QUICKSAND,
-
     # Conveyor
     BackgroundTile.CONVEYOR_LEFT: FineTileType.CONVEYOR_LEFT,
     BackgroundTile.CONVEYOR_RIGHT: FineTileType.CONVEYOR_RIGHT,
-
     # Water (visual background only, not actionable)
     BackgroundTile.WATER: FineTileType.EMPTY,
     BackgroundTile.WATER_TOP: FineTileType.EMPTY,
-
     # Whale is solid platform
     BackgroundTile.WATER_WHALE: FineTileType.SOLID,
     BackgroundTile.WATER_WHALE_TAIL: FineTileType.SOLID,
-
     # Collectibles (auto-collect on touch)
     BackgroundTile.CHERRY: FineTileType.CHERRY,
     BackgroundTile.GRASS_COIN: FineTileType.CHERRY,
     BackgroundTile.GRASS_POTION: FineTileType.POTION,
     BackgroundTile.SUBSPACE_MUSHROOM_1: FineTileType.MUSHROOM,
     BackgroundTile.SUBSPACE_MUSHROOM_2: FineTileType.MUSHROOM,
-
     # Pickable items (can pick up and throw)
     BackgroundTile.GRASS_LARGE_VEGGIE: FineTileType.VEGETABLE,
     BackgroundTile.GRASS_SMALL_VEGGIE: FineTileType.VEGETABLE,
@@ -452,7 +428,6 @@ TILE_ID_MAPPING: dict[int, FineTileType] = { \
     BackgroundTile.GRASS_SHELL: FineTileType.VEGETABLE,
     BackgroundTile.GRASS_1UP: FineTileType.MUSHROOM,
     BackgroundTile.GRASS_INACTIVE: FineTileType.EMPTY,
-
     # Jar
     BackgroundTile.JAR_TOP_GENERIC: FineTileType.JAR,
     BackgroundTile.JAR_TOP_NON_ENTERABLE: FineTileType.JAR,
@@ -460,7 +435,6 @@ TILE_ID_MAPPING: dict[int, FineTileType] = { \
     BackgroundTile.JAR_MIDDLE: FineTileType.JAR,
     BackgroundTile.JAR_BOTTOM: FineTileType.JAR,
     BackgroundTile.JAR_SMALL: FineTileType.JAR,
-
     # Unused/unknown tiles (treated as empty/non-interactive)
     BackgroundTile.UNUSED_0E: FineTileType.EMPTY,
     BackgroundTile.UNUSED_0F: FineTileType.EMPTY,
@@ -563,7 +537,7 @@ TILE_ID_MAPPING: dict[int, FineTileType] = { \
     BackgroundTile.UNUSED_FD: FineTileType.EMPTY,
     BackgroundTile.UNUSED_FE: FineTileType.EMPTY,
     BackgroundTile.UNUSED_FF: FineTileType.EMPTY,
-   }
+}
 
 # ------------------------------------------------------------------------------
 # ---- Sprite (object) mappings ------------------------------------------------
@@ -581,171 +555,89 @@ TILE_ID_MAPPING: dict[int, FineTileType] = { \
 # Only genuinely hostile objects map to ENEMY (or PROJECTILE, for the hostile
 # things that cannot be defeated).
 OBJECT_ID_MAPPING: dict[int, FineTileType] = {
-
     # ---- COLLECTIBLE - auto-collect on touch ----
-    EnemyId.HEART:
-        FineTileType.HEART,
-    EnemyId.COIN:
-        FineTileType.COIN,
-    EnemyId.MUSHROOM:
-        FineTileType.MUSHROOM,
-    EnemyId.MUSHROOM_1UP:
-        FineTileType.MUSHROOM,
-    EnemyId.STARMAN:
-        FineTileType.POWERUP,
-    EnemyId.STOPWATCH:
-        FineTileType.POWERUP,
-    EnemyId.CRYSTAL_BALL:
-        FineTileType.POWERUP,
-
+    EnemyId.HEART: FineTileType.HEART,
+    EnemyId.COIN: FineTileType.COIN,
+    EnemyId.MUSHROOM: FineTileType.MUSHROOM,
+    EnemyId.MUSHROOM_1UP: FineTileType.MUSHROOM,
+    EnemyId.STARMAN: FineTileType.POWERUP,
+    EnemyId.STOPWATCH: FineTileType.POWERUP,
+    EnemyId.CRYSTAL_BALL: FineTileType.POWERUP,
     # ---- PICKABLE - can be picked up and thrown ----
-    EnemyId.VEGETABLE_SMALL:
-        FineTileType.VEGETABLE,
-    EnemyId.VEGETABLE_LARGE:
-        FineTileType.VEGETABLE,
-    EnemyId.VEGETABLE_WART:
-        FineTileType.VEGETABLE,
-    EnemyId.SHELL:
-        FineTileType.SHELL,
-    EnemyId.BOMB:
-        FineTileType.BOMB,
-    EnemyId.BOB_OMB:
-        FineTileType.BOMB,  # walks, but is picked up and thrown
-    EnemyId.ROCKET:
-        FineTileType.VEGETABLE,
-    EnemyId.MUSHROOM_BLOCK:
-        FineTileType.POW_BLOCK,
-    EnemyId.POW_BLOCK:
-        FineTileType.POW_BLOCK,
-    EnemyId.KEY:
-        FineTileType.KEY,
-    EnemyId.SUBSPACE_POTION:
-        FineTileType.POTION,
-
+    EnemyId.VEGETABLE_SMALL: FineTileType.VEGETABLE,
+    EnemyId.VEGETABLE_LARGE: FineTileType.VEGETABLE,
+    EnemyId.VEGETABLE_WART: FineTileType.VEGETABLE,
+    EnemyId.SHELL: FineTileType.SHELL,
+    EnemyId.BOMB: FineTileType.BOMB,
+    EnemyId.BOB_OMB: FineTileType.BOMB,  # walks, but is picked up and thrown
+    EnemyId.ROCKET: FineTileType.VEGETABLE,
+    EnemyId.MUSHROOM_BLOCK: FineTileType.POW_BLOCK,
+    EnemyId.POW_BLOCK: FineTileType.POW_BLOCK,
+    EnemyId.KEY: FineTileType.KEY,
+    EnemyId.SUBSPACE_POTION: FineTileType.POTION,
     # ---- INTERACTIVE - enter/activate ----
-    EnemyId.SUBSPACE_DOOR:
-        FineTileType.DOOR,
+    EnemyId.SUBSPACE_DOOR: FineTileType.DOOR,
     # Hawkmouth is the level-exit mouth: an entrance, not a threat.
-    EnemyId.HAWKMOUTH_RIGHT:
-        FineTileType.DOOR,
-    EnemyId.HAWKMOUTH_LEFT:
-        FineTileType.DOOR,
-
+    EnemyId.HAWKMOUTH_RIGHT: FineTileType.DOOR,
+    EnemyId.HAWKMOUTH_LEFT: FineTileType.DOOR,
     # ---- TERRAIN - ridable / standable objects ----
-    EnemyId.FLYING_CARPET:
-        FineTileType.PLATFORM,
-    EnemyId.FALLING_LOGS:
-        FineTileType.PLATFORM,
-
+    EnemyId.FLYING_CARPET: FineTileType.PLATFORM,
+    EnemyId.FALLING_LOGS: FineTileType.PLATFORM,
     # ---- ENEMY - genuinely hostile ----
-    EnemyId.SHYGUY_RED:
-        FineTileType.ENEMY,
-    EnemyId.SHYGUY_PINK:
-        FineTileType.ENEMY,
-    EnemyId.TWEETER:
-        FineTileType.ENEMY,
-    EnemyId.PORCUPO:
-        FineTileType.ENEMY,
-    EnemyId.SNIFIT_RED:
-        FineTileType.ENEMY,
-    EnemyId.SNIFIT_GRAY:
-        FineTileType.ENEMY,
-    EnemyId.SNIFIT_PINK:
-        FineTileType.ENEMY,
-    EnemyId.OSTRO:
-        FineTileType.ENEMY,
-    EnemyId.ALBATOSS_CARRYING_BOB_OMB:
-        FineTileType.ENEMY,
-    EnemyId.ALBATOSS_START_RIGHT:
-        FineTileType.ENEMY,
-    EnemyId.ALBATOSS_START_LEFT:
-        FineTileType.ENEMY,
-    EnemyId.NINJI_RUNNING:
-        FineTileType.ENEMY,
-    EnemyId.NINJI_JUMPING:
-        FineTileType.ENEMY,
-    EnemyId.BEEZO_DIVING:
-        FineTileType.ENEMY,
-    EnemyId.BEEZO_STRAIGHT:
-        FineTileType.ENEMY,
-    EnemyId.PIDGIT:
-        FineTileType.ENEMY,
-    EnemyId.TROUTER:
-        FineTileType.ENEMY,
-    EnemyId.HOOPSTAR:
-        FineTileType.ENEMY,
-    EnemyId.JAR_GENERATOR_SHYGUY:
-        FineTileType.ENEMY,
-    EnemyId.JAR_GENERATOR_BOB_OMB:
-        FineTileType.ENEMY,
-    EnemyId.PHANTO:
-        FineTileType.ENEMY,
-    EnemyId.COBRAT_JAR:
-        FineTileType.ENEMY,
-    EnemyId.COBRAT_SAND:
-        FineTileType.ENEMY,
-    EnemyId.POKEY:
-        FineTileType.ENEMY,
-    EnemyId.BIRDO:
-        FineTileType.ENEMY,
-    EnemyId.MOUSER:
-        FineTileType.ENEMY,
-    EnemyId.TRYCLYDE:
-        FineTileType.ENEMY,
-    EnemyId.CLAWGRIP:
-        FineTileType.ENEMY,
-    EnemyId.PANSER_STATIONARY_FIRES_ANGLED:
-        FineTileType.ENEMY,
-    EnemyId.PANSER_WALKING:
-        FineTileType.ENEMY,
-    EnemyId.PANSER_STATIONARY_FIRES_UP:
-        FineTileType.ENEMY,
-    EnemyId.AUTOBOMB:
-        FineTileType.ENEMY,
-    EnemyId.FLURRY:
-        FineTileType.ENEMY,
-    EnemyId.FRYGUY:
-        FineTileType.ENEMY,
-    EnemyId.FRYGUY_SPLIT:
-        FineTileType.ENEMY,
-    EnemyId.WART:
-        FineTileType.ENEMY,
-    EnemyId.HAWKMOUTH_BOSS:
-        FineTileType.ENEMY,
-    EnemyId.VEGETABLE_THROWER:
-        FineTileType.ENEMY,
-
+    EnemyId.SHYGUY_RED: FineTileType.ENEMY,
+    EnemyId.SHYGUY_PINK: FineTileType.ENEMY,
+    EnemyId.TWEETER: FineTileType.ENEMY,
+    EnemyId.PORCUPO: FineTileType.ENEMY,
+    EnemyId.SNIFIT_RED: FineTileType.ENEMY,
+    EnemyId.SNIFIT_GRAY: FineTileType.ENEMY,
+    EnemyId.SNIFIT_PINK: FineTileType.ENEMY,
+    EnemyId.OSTRO: FineTileType.ENEMY,
+    EnemyId.ALBATOSS_CARRYING_BOB_OMB: FineTileType.ENEMY,
+    EnemyId.ALBATOSS_START_RIGHT: FineTileType.ENEMY,
+    EnemyId.ALBATOSS_START_LEFT: FineTileType.ENEMY,
+    EnemyId.NINJI_RUNNING: FineTileType.ENEMY,
+    EnemyId.NINJI_JUMPING: FineTileType.ENEMY,
+    EnemyId.BEEZO_DIVING: FineTileType.ENEMY,
+    EnemyId.BEEZO_STRAIGHT: FineTileType.ENEMY,
+    EnemyId.PIDGIT: FineTileType.ENEMY,
+    EnemyId.TROUTER: FineTileType.ENEMY,
+    EnemyId.HOOPSTAR: FineTileType.ENEMY,
+    EnemyId.JAR_GENERATOR_SHYGUY: FineTileType.ENEMY,
+    EnemyId.JAR_GENERATOR_BOB_OMB: FineTileType.ENEMY,
+    EnemyId.PHANTO: FineTileType.ENEMY,
+    EnemyId.COBRAT_JAR: FineTileType.ENEMY,
+    EnemyId.COBRAT_SAND: FineTileType.ENEMY,
+    EnemyId.POKEY: FineTileType.ENEMY,
+    EnemyId.BIRDO: FineTileType.ENEMY,
+    EnemyId.MOUSER: FineTileType.ENEMY,
+    EnemyId.TRYCLYDE: FineTileType.ENEMY,
+    EnemyId.CLAWGRIP: FineTileType.ENEMY,
+    EnemyId.PANSER_STATIONARY_FIRES_ANGLED: FineTileType.ENEMY,
+    EnemyId.PANSER_WALKING: FineTileType.ENEMY,
+    EnemyId.PANSER_STATIONARY_FIRES_UP: FineTileType.ENEMY,
+    EnemyId.AUTOBOMB: FineTileType.ENEMY,
+    EnemyId.FLURRY: FineTileType.ENEMY,
+    EnemyId.FRYGUY: FineTileType.ENEMY,
+    EnemyId.FRYGUY_SPLIT: FineTileType.ENEMY,
+    EnemyId.WART: FineTileType.ENEMY,
+    EnemyId.HAWKMOUTH_BOSS: FineTileType.ENEMY,
+    EnemyId.VEGETABLE_THROWER: FineTileType.ENEMY,
     # ---- PROJECTILE - hostile, cannot be defeated, so worth distinguishing ----
-    EnemyId.WART_BUBBLE:
-        FineTileType.PROJECTILE,
-    EnemyId.BULLET:
-        FineTileType.PROJECTILE,
-    EnemyId.EGG:
-        FineTileType.PROJECTILE,  # thrown by Birdo; becomes ridable
-    EnemyId.FIREBALL:
-        FineTileType.PROJECTILE,
-    EnemyId.CLAWGRIP_ROCK:
-        FineTileType.PROJECTILE,
-    EnemyId.AUTOBOMB_FIRE:
-        FineTileType.PROJECTILE,
-    EnemyId.WHALE_SPOUT:
-        FineTileType.PROJECTILE,
-    EnemyId.SPARK1:
-        FineTileType.PROJECTILE,
-    EnemyId.SPARK2:
-        FineTileType.PROJECTILE,
-    EnemyId.SPARK3:
-        FineTileType.PROJECTILE,
-    EnemyId.SPARK4:
-        FineTileType.PROJECTILE,
-
+    EnemyId.WART_BUBBLE: FineTileType.PROJECTILE,
+    EnemyId.BULLET: FineTileType.PROJECTILE,
+    EnemyId.EGG: FineTileType.PROJECTILE,  # thrown by Birdo; becomes ridable
+    EnemyId.FIREBALL: FineTileType.PROJECTILE,
+    EnemyId.CLAWGRIP_ROCK: FineTileType.PROJECTILE,
+    EnemyId.AUTOBOMB_FIRE: FineTileType.PROJECTILE,
+    EnemyId.WHALE_SPOUT: FineTileType.PROJECTILE,
+    EnemyId.SPARK1: FineTileType.PROJECTILE,
+    EnemyId.SPARK2: FineTileType.PROJECTILE,
+    EnemyId.SPARK3: FineTileType.PROJECTILE,
+    EnemyId.SPARK4: FineTileType.PROJECTILE,
     # ---- Control/spawner pseudo-objects: nothing is drawn, so nothing to mark ----
-    EnemyId.ATTACK_ALBATOSS_CARRYING_BOB_OMB:
-        FineTileType.EMPTY,
-    EnemyId.ATTACK_BEEZO:
-        FineTileType.EMPTY,
-    EnemyId.STOP_ATTACK:
-        FineTileType.EMPTY,
+    EnemyId.ATTACK_ALBATOSS_CARRYING_BOB_OMB: FineTileType.EMPTY,
+    EnemyId.ATTACK_BEEZO: FineTileType.EMPTY,
+    EnemyId.STOP_ATTACK: FineTileType.EMPTY,
 }
 
 # The BOSS_* range (0x5C-0x7F) mirrors the regular range (0x1C-0x3F) exactly --
@@ -782,5 +674,19 @@ LIFTABLE_FINE_TYPES: frozenset[FineTileType] = frozenset(
         FineTileType.POTION,
         FineTileType.MUSHROOM,
         FineTileType.SHELL,
+    }
+)
+
+# Fine types that are never larger than a single tile. Object footprints are
+# measured from the sprites being drawn, which cannot separate two objects at the
+# same position -- a Cobrat and the bullet it just spat share an anchor, so the
+# bullet would otherwise inherit the Cobrat's 1x2 sprite block. These types are
+# small by definition, so their footprint is capped rather than measured.
+SINGLE_TILE_FINE_TYPES: frozenset[FineTileType] = frozenset(
+    {
+        FineTileType.PROJECTILE,
+        FineTileType.COIN,
+        FineTileType.CHERRY,
+        FineTileType.HEART,
     }
 )
