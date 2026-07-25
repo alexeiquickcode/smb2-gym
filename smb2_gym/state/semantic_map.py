@@ -11,20 +11,39 @@ from ..constants import (
     GAME_STATE,
     LEVEL_PAGE_HEIGHT,
     LEVEL_PAGE_WIDTH,
+    OAM_SPRITE_COUNT,
+    OAM_SPRITE_HEIGHT,
+    OAM_SPRITE_WIDTH,
+    OBJECT_MAX_TILES,
+    OBJECT_SPRITE_MAX_HEIGHT,
+    OBJECT_SPRITE_MAX_WIDTH,
+    OBJECT_VELOCITY_SCALE,
     PAGE_SIZE,
     PLAYER,
+    PLAYER_HEIGHT_BIG,
+    PLAYER_HEIGHT_DUCKING,
+    PLAYER_HEIGHT_SMALL,
+    PLAYER_OAM_INDICES,
     SCREEN_HEIGHT,
     SCREEN_TILES_HEIGHT,
     SCREEN_TILES_WIDTH,
     TILE_SIZE,
     VIEWPORT,
     EnemyState,
+    SpriteFlags,
 )
 from ..constants.semantic import (
     COARSE_LOOKUP,
+    COARSE_TENSOR_CHANNELS,
     COLOR_LOOKUP,
+    DAMAGING_FINE_TYPES,
+    LIFTABLE_FINE_TYPES,
+    NO_OBJECT,
+    OBJECT_ID_MAPPING,
+    PROPERTY_CHANNEL_NAMES,
     SEMANTIC_TILE_DTYPE,
     TILE_ID_MAPPING,
+    UNMAPPED_OBJECT_FINE_TYPE,
     FineTileType,
 )
 from ._base import (
@@ -89,10 +108,73 @@ class SemanticMapMixin(GameStateMixin, HasEnemies):
 
         return (min_x, min_y)
 
+    # ---- Coordinate transforms -------------------------------------
+
+    def _world_to_screen_pixels(self, world_x: int, world_y: int) -> tuple[int, int]:
+        """Convert world pixel coordinates to semantic-map screen pixel coordinates.
+
+        This is the single place where the viewport offset is applied. Both the
+        player and the enemies must go through it, otherwise the two end up in
+        different frames of reference and drift apart by a tile.
+
+        No status-bar correction is applied: world Y already aligns with the
+        semantic map's rows, verified by checking that a grounded player's feet
+        land exactly on the first SOLID row beneath them.
+
+        Args:
+            world_x: X position in world pixels
+            world_y: Y position in world pixels
+
+        Returns:
+            tuple of (screen_x, screen_y) in pixels, relative to the semantic map origin
+        """
+        viewport_x, viewport_y = self._get_viewport_offset()
+
+        screen_x = world_x - (viewport_x * TILE_SIZE)
+        screen_y = world_y - (viewport_y * TILE_SIZE)
+
+        return screen_x, screen_y
+
+    def _world_to_screen_tile(self, world_x: int, world_y: int) -> tuple[int, int]:
+        """Convert world pixel coordinates to a semantic-map tile index.
+
+        Args:
+            world_x: X position in world pixels
+            world_y: Y position in world pixels
+
+        Returns:
+            tuple of (tile_x, tile_y) indices into the semantic map
+        """
+        screen_x, screen_y = self._world_to_screen_pixels(world_x, world_y)
+        return screen_x // TILE_SIZE, screen_y // TILE_SIZE
+
+    def _sprite_column(self, world_x: int) -> int:
+        """Get the tile column a sprite occupies, from its left-edge world X.
+
+        Sprites are a tile wide but rarely tile-aligned, so they usually straddle
+        two columns; the one containing their centre is the column they are most
+        in. Both the player and the enemies store their X as a left edge, so both
+        must be centred the same way -- otherwise a carried item, which shares its
+        carrier's X, lands in a different column than the carrier.
+
+        Args:
+            world_x: Left edge of the sprite, in world pixels
+
+        Returns:
+            Tile column index
+        """
+        screen_x, _ = self._world_to_screen_pixels(world_x + (TILE_SIZE // 2), 0)
+        return screen_x // TILE_SIZE
+
     # ---- Player State ----------------------------------------------
 
-    def is_player_ducking(self) -> bool:  # TODO: This doesn't change the hitbox?? Need to review
+    def is_player_ducking(self) -> bool:
         """Check if the player is currently ducking/crouching.
+
+        Ducking does not move the player: its RAM Y, and its sprite bounds, are
+        identical standing and ducking. What changes is the collision box height
+        (see `get_player_collision_height`), which is why this is detected from
+        the sprite tile rather than from any position delta.
 
         Returns:
             True if player is ducking, False otherwise
@@ -117,54 +199,96 @@ class SemanticMapMixin(GameStateMixin, HasEnemies):
 
         return False
 
+    def get_player_collision_height(self) -> int:
+        """Get the height of the player's collision box in pixels.
+
+        The box shrinks from the top: ducking and losing a life both halve the
+        height while `Player.Y_POSITION` stays where it is.
+
+        Returns:
+            Height in pixels (32 when big and standing, 16 when small or ducking)
+        """
+        life_meter = self._read_ram_safe(PLAYER.LIFE_METER)
+        num_hearts = (life_meter >> 4) + 1
+
+        if num_hearts < 2:
+            return PLAYER_HEIGHT_SMALL
+        if self.is_player_ducking():
+            return PLAYER_HEIGHT_DUCKING
+        return PLAYER_HEIGHT_BIG
+
+    def get_player_collision_box(self) -> tuple[int, int, int, int]:
+        """Get the player's collision box in world pixel coordinates.
+
+        Derived from RAM rather than from OAM sprite bounds. Sprite extents are a
+        rendering artefact -- they include animation frames and, because the
+        player is drawn as 8x16 sprites, the lowest OAM entry is the top of the
+        bottom sprite rather than the player's feet.
+
+        Player.Y_POSITION is the TOP of the box when the player is big and
+        standing, and -- crucially -- it does not move when the player ducks or
+        shrinks. So the box is built downward from a fixed full-height bottom
+        edge, shrinking from the top, rather than from Y downward.
+
+        A caveat on the rendering, which is why OAM must not be used here: a small
+        player is still DRAWN as a 32px-tall sprite pair, just shifted 8px down
+        (measured big -> small: sprite top 80 -> 88, bottom 112 -> 120, span 32
+        both times). Only the collision height actually halves.
+
+        Returns:
+            tuple of (left, top, right, bottom) in world pixels, where right/bottom
+            are exclusive.
+        """
+        x_page = self._read_ram_safe(PLAYER.X_PAGE)
+        x_pos = self._read_ram_safe(PLAYER.X_POSITION)
+        y_page = self._read_ram_safe(PLAYER.Y_PAGE)
+        y_pos = self._read_ram_safe(PLAYER.Y_POSITION)
+
+        if y_page == 255:  # Screen wrap-around when moving above the top
+            y_page = 0
+
+        world_x = (x_page * PAGE_SIZE) + x_pos
+        # Feet are at the bottom of the full-height box, regardless of the
+        # player's current height.
+        world_y_feet = (y_page * PAGE_SIZE) + y_pos + PLAYER_HEIGHT_BIG
+
+        height = self.get_player_collision_height()
+        # The box is one tile wide; RAM X is its left edge.
+        return world_x, world_y_feet - height, world_x + TILE_SIZE, world_y_feet
+
     def get_player_collision_tiles(self) -> list[tuple[int, int]]:
         """Get the tile positions occupied by the player for collision detection.
 
+        The box is anchored at the feet and extends upward by the current
+        collision height, so ducking correctly drops the head tile while keeping
+        the feet tile, rather than appearing to shift the player up a cell.
+
         Returns:
-            List of (screen_x_tile, screen_y_tile) tuples representing tiles occupied by player.
-            Returns empty list if player position not found.
+            List of (screen_x_tile, screen_y_tile) tuples representing tiles occupied
+            by the player, ordered top to bottom.
         """
-        # Get sprites
-        oam_sprites = self._read_player_sprites()
-        if not oam_sprites:
+        left, top, _right, bottom = self.get_player_collision_box()
+
+        tile_x = self._sprite_column(left)
+        if not 0 <= tile_x < SCREEN_TILES_WIDTH:
             return []
 
-        # Get sprite bounds
-        min_x = min(sprite[3] for sprite in oam_sprites)
-        max_x = max(sprite[3] for sprite in oam_sprites)
-        min_y = min(sprite[0] for sprite in oam_sprites)
-        max_y = max(sprite[0] for sprite in oam_sprites)
+        # The box covers a whole number of tiles, so report exactly that many:
+        # two rows for a 32px player, one for a 16px one. Listing every row the
+        # box merely overlaps would report three rows whenever the player is not
+        # tile-aligned, which is most of a jump.
+        row_count = max(1, round((bottom - top) / TILE_SIZE))
 
-        # Calculate which tiles are occupied
-        tiles: list[tuple[int, int]] = []
+        # Anchor on the feet -- the row the lowest part of the box is most in --
+        # and extend upward, so ducking and shrinking drop the head row while the
+        # feet row stays put.
+        _, feet_row = self._world_to_screen_tile(left, bottom - 1 - (TILE_SIZE // 2))
 
-        # Get X tile using center of sprite (add half tile width for centering)
-        center_x = (min_x + max_x) // 2
-        x_tile = (center_x + TILE_SIZE // 2) // TILE_SIZE
-
-        # Check if player has 2+ hearts (is big)
-        life_meter = self._read_ram_safe(PLAYER.LIFE_METER)
-        num_hearts = (life_meter >> 4) + 1
-        is_big = num_hearts >= 2
-
-        # Check if ducking
-        is_ducking = self.is_player_ducking()
-
-        if is_big and not is_ducking:
-            # Big player standing: occupies 2 vertical tiles
-            # Use min and max Y to determine tiles, add 16 pixels to compensate for viewport shift
-            top_tile = (min_y + 16) // TILE_SIZE
-            bottom_tile = (max_y + 16) // TILE_SIZE
-            tiles.append((x_tile, top_tile))
-            if bottom_tile != top_tile:
-                tiles.append((x_tile, bottom_tile))
-        else:
-            # Small player or ducking big player: occupies 1 tile
-            # Use min_y (top of sprite) and add 16 pixels to compensate for viewport shift
-            y_tile = (min_y + 16) // TILE_SIZE
-            tiles.append((x_tile, y_tile))
-
-        return tiles
+        return [
+            (tile_x, row)
+            for row in range(feet_row - row_count + 1, feet_row + 1)
+            if 0 <= row < SCREEN_TILES_HEIGHT
+        ]
 
     # ---- Enemy Positions (RAM-based) ------------------------------
 
@@ -177,13 +301,22 @@ class SemanticMapMixin(GameStateMixin, HasEnemies):
         Returns:
             List of (x_pixel, y_pixel, enemy_id) tuples for visible enemies on screen.
         """
+        return [
+            (screen_x, screen_y, enemy.object_type)
+            for screen_x, screen_y, enemy in self._get_visible_objects()
+        ]
 
-        # Get viewport offset to convert world coordinates to screen coordinates
-        viewport_x, viewport_y = self._get_viewport_offset()
-        viewport_x_pixels = viewport_x * TILE_SIZE
-        viewport_y_pixels = viewport_y * TILE_SIZE
+    def _get_visible_objects(self) -> list[tuple[int, int, Any]]:
+        """Get on-screen objects with their screen position and full slot data.
 
-        enemy_positions: list[tuple[int, int, int]] = []
+        Returns the Enemy record rather than just the id so callers can reach
+        velocity and sprite flags without re-reading the slots.
+
+        Returns:
+            List of (x_pixel, y_pixel, enemy) tuples for visible objects on screen.
+        """
+
+        enemy_positions: list[tuple[int, int, Any]] = []
         for enemy in self.enemies:
             if enemy.state != EnemyState.VISIBLE:
                 continue
@@ -203,42 +336,162 @@ class SemanticMapMixin(GameStateMixin, HasEnemies):
             world_y_raw = (SCREEN_HEIGHT - 1) - enemy.y_position
             world_y = (enemy.y_page * PAGE_SIZE) + world_y_raw
 
-            # Convert to screen coordinates
-            screen_x = world_x - viewport_x_pixels
-            screen_y = world_y - viewport_y_pixels
+            # Convert to screen coordinates through the shared transform, so
+            # enemies land in the same frame of reference as the player
+            screen_x, screen_y = self._world_to_screen_pixels(world_x, world_y)
 
             # Only include enemies that are on screen
             if 0 <= screen_x < PAGE_SIZE and 0 <= screen_y < SCREEN_TILES_HEIGHT * TILE_SIZE:
-                enemy_positions.append((screen_x, screen_y, enemy.object_type))
+                enemy_positions.append((screen_x, screen_y, enemy))
 
         return enemy_positions
 
-    def _add_enemies_to_map(self, collision_map: NDArray[np.uint8]) -> NDArray[np.uint8]:
-        """Add enemy positions to the collision map using RAM data.
+    def _measure_object_size(self, screen_x: int, screen_y: int) -> tuple[int, int]:
+        """Measure a sprite object's size in tiles from the OAM entries drawing it.
 
-        Reads enemy positions from RAM and marks their occupied tiles.
-        Only includes visible enemies that are on screen.
+        The game does not expose object dimensions in RAM -- the only size-related
+        flag is WIDE_SPRITE, which applies to Mouser alone -- so the size is
+        recovered from what is actually being drawn. This keeps oversized objects
+        (a 1x3 Hawkmouth, a 1x2 Birdo) correct without hand-maintaining a table,
+        and stays right for animation frames and boss variants.
 
         Args:
-            collision_map: Base collision map to overlay enemies on
+            screen_x: Object's left edge in screen pixels
+            screen_y: Object's top edge in screen pixels
 
         Returns:
-            Updated collision map with enemy positions
+            tuple of (width_tiles, height_tiles), at least 1x1
         """
-        # Get all visible enemy positions from RAM
-        enemy_positions = self._get_enemy_screen_positions()
+        # The player is drawn at fixed OAM indices, so exclude it: its sprites sit
+        # right on top of whatever it is standing on and would inflate the match.
+        candidates: list[tuple[int, int]] = []
 
-        # Mark each enemy position on the collision map
-        for x_pixel, y_pixel, _enemy_id in enemy_positions:
-            # Convert pixel position to tile position
-            tile_x = x_pixel // TILE_SIZE
-            tile_y = y_pixel // TILE_SIZE
+        for sprite_index in range(OAM_SPRITE_COUNT):
+            if sprite_index in PLAYER_OAM_INDICES:
+                continue
 
-            # Check bounds and set enemy tile
-            if 0 <= tile_x < SCREEN_TILES_WIDTH and 0 <= tile_y < SCREEN_TILES_HEIGHT:
-                collision_map[tile_y, tile_x] = FineTileType.ENEMY
+            sprite_data = self._nes.read_oam_sprite(sprite_index)
+            if sprite_data is None:
+                continue
 
-        return collision_map
+            oam_y, _tile_id, _attributes, oam_x = sprite_data
+            if oam_y >= SCREEN_HEIGHT:  # Off-screen sentinel
+                continue
+
+            # OAM stores Y minus one
+            sprite_top = oam_y + 1
+
+            # Coarse window: anything that could plausibly belong to this object
+            if abs(oam_x - screen_x) > OBJECT_SPRITE_MAX_WIDTH:
+                continue
+            if not -TILE_SIZE < (sprite_top - screen_y) < OBJECT_SPRITE_MAX_HEIGHT:
+                continue
+
+            candidates.append((oam_x, sprite_top))
+
+        if not candidates:
+            return 1, 1
+
+        # Grow the cluster outward from the anchor, keeping only sprites that
+        # actually touch what is already in it. A fixed window is not enough: a
+        # nearby object's sprites fall inside it and silently inflate the size,
+        # which is how a 1-tile-wide Hawkmouth measured 3 tiles wide.
+        cluster = [(screen_x, screen_y)]
+        remaining = list(candidates)
+        grew = True
+        while grew:
+            grew = False
+            for candidate in list(remaining):
+                if any(
+                    abs(candidate[0]
+                        - member[0]) <= OAM_SPRITE_WIDTH and abs(candidate[1]
+                                                                 - member[1]) <= OAM_SPRITE_HEIGHT
+                    for member in cluster
+                ):
+                    cluster.append(candidate)
+                    remaining.remove(candidate)
+                    grew = True
+
+        # OAM sprites are 8px wide and, in 8x16 mode, 16px tall
+        xs = [x for x, _ in cluster]
+        ys = [y for _, y in cluster]
+        width_px = (max(xs) + OAM_SPRITE_WIDTH) - min(xs)
+        height_px = (max(ys) + OAM_SPRITE_HEIGHT) - min(ys)
+
+        width = max(1, round(width_px / TILE_SIZE))
+        height = max(1, round(height_px / TILE_SIZE))
+
+        # Guard against a runaway cluster swallowing nearby objects
+        return min(width, OBJECT_MAX_TILES), min(height, OBJECT_MAX_TILES)
+
+    def _build_object_maps(self) -> tuple[NDArray[np.uint8], NDArray[np.uint8]]:
+        """Build the sprite-object layers: which object occupies each cell.
+
+        The sprite slots hold every dynamic object, not just enemies, so each is
+        classified by its object ID -- a subspace door reads as DOOR, a coin as
+        COIN, and only genuinely hostile objects as ENEMY. Unrecognised ids fall
+        back to ENEMY, since treating an unknown hazard as harmless is the more
+        dangerous mistake.
+
+        Objects fill their whole measured footprint, and are kept separate from
+        the terrain rather than overwriting it: a door standing on solid ground
+        must read as both, or there is no way to tell standing on it from being
+        inside it.
+
+        Returns:
+            tuple of (object_id_map, object_fine_type_map, property_map, velocity_map).
+            property_map is (15, 16, 2) uint8 holding the DAMAGES and LIFTABLE
+            masks; velocity_map is (15, 16, 2) float32 holding normalised X and Y
+            velocity.
+        """
+        shape = (SCREEN_TILES_HEIGHT, SCREEN_TILES_WIDTH)
+        object_id_map = np.full(shape, NO_OBJECT, dtype=np.uint8)
+        object_type_map = np.zeros(shape, dtype=np.uint8)
+        property_map = np.zeros((*shape, 2), dtype=np.uint8)
+        velocity_map = np.zeros((*shape, 2), dtype=np.float32)
+
+        for x_pixel, y_pixel, enemy in self._get_visible_objects():
+            object_id = enemy.object_type
+            fine_type = OBJECT_ID_MAPPING.get(object_id, UNMAPPED_OBJECT_FINE_TYPE)
+
+            # Pseudo-objects (attack triggers, spawner control) draw nothing
+            if fine_type == FineTileType.EMPTY:
+                continue
+
+            damages = fine_type in DAMAGING_FINE_TYPES
+            # The runtime UNLIFTABLE flag overrides the type-based guess: some
+            # otherwise-liftable objects are pinned in place.
+            flags = enemy.sprite_flags or 0
+            liftable = (fine_type in LIFTABLE_FINE_TYPES and not flags & SpriteFlags.UNLIFTABLE)
+
+            velocity_x = np.clip((enemy.x_velocity or 0) / OBJECT_VELOCITY_SCALE, -1.0, 1.0)
+            # Object Y velocity is in raw screen space (positive = downward). The
+            # map's rows also increase downward, so no inversion is needed here.
+            velocity_y = np.clip((enemy.y_velocity or 0) / OBJECT_VELOCITY_SCALE, -1.0, 1.0)
+
+            width, height = self._measure_object_size(x_pixel, y_pixel)
+
+            # The X is a left edge, centred the same way the player's is -- a
+            # carried item shares its carrier's X and must land in its column.
+            # The anchor is the object's top-left, so the footprint extends right
+            # and down from there.
+            left_tile = (x_pixel + (TILE_SIZE // 2)) // TILE_SIZE
+            top_tile = y_pixel // TILE_SIZE
+
+            for row in range(top_tile, top_tile + height):
+                if not 0 <= row < SCREEN_TILES_HEIGHT:
+                    continue
+                for column in range(left_tile, left_tile + width):
+                    if not 0 <= column < SCREEN_TILES_WIDTH:
+                        continue
+                    object_id_map[row, column] = object_id
+                    object_type_map[row, column] = fine_type
+                    property_map[row, column, 0] = damages
+                    property_map[row, column, 1] = liftable
+                    velocity_map[row, column, 0] = velocity_x
+                    velocity_map[row, column, 1] = velocity_y
+
+        return object_id_map, object_type_map, property_map, velocity_map
 
     # ---- Viewport --------------------------------------------------
 
@@ -396,20 +649,24 @@ class SemanticMapMixin(GameStateMixin, HasEnemies):
     def semantic_map(self) -> NDArray[Any]:
         """Get full semantic map with hierarchical tile information.
 
+        Terrain and sprite objects occupy separate fields, so a cell can report
+        both -- a door standing on solid ground reads as SOLID terrain with a
+        DOOR object, which is what distinguishes standing on it from being inside
+        it. The terrain fields are never overwritten by a sprite.
+
         Returns a structured numpy array with complete tile information:
-        - tile_id: Raw game object ID (BackgroundTile/EnemyId)
-        - fine_type: Fine-grained FineTileType (SOLID, ENEMY, etc.)
-        - coarse_type: Coarse-grained CoarseTileType (TERRAIN, ENEMY, etc.)
-        - color_r, color_g, color_b: RGB visualisation colour
+        - tile_id: Raw BackgroundTile ID
+        - fine_type / coarse_type: the TERRAIN in this cell
+        - object_id: EnemyId of the sprite here, or NO_OBJECT (0xFF)
+        - object_fine_type / object_coarse_type: that sprite's classification
+        - color_r, color_g, color_b: RGB colour, object over terrain
 
         Returns:
             2D structured numpy array (15 x 16) with SEMANTIC_TILE_DTYPE (height x width).
         """
-        # Read tile maps from SRAM
+        # Read terrain from SRAM, and sprite objects from the object slots
         tile_id_map, fine_type_map = self._read_tile_maps()
-
-        # Add enemy sprites from RAM (modifies fine_type_map)
-        fine_type_map = self._add_enemies_to_map(fine_type_map)
+        object_id_map, object_type_map, property_map, velocity_map = self._build_object_maps()
 
         # Create structured array
         semantic_map = np.zeros(
@@ -420,8 +677,108 @@ class SemanticMapMixin(GameStateMixin, HasEnemies):
         semantic_map['tile_id'] = tile_id_map
         semantic_map['fine_type'] = fine_type_map
         semantic_map['coarse_type'] = COARSE_LOOKUP[fine_type_map]
-        semantic_map['color_r'] = COLOR_LOOKUP[fine_type_map, 0]
-        semantic_map['color_g'] = COLOR_LOOKUP[fine_type_map, 1]
-        semantic_map['color_b'] = COLOR_LOOKUP[fine_type_map, 2]
+        semantic_map['object_id'] = object_id_map
+        semantic_map['object_fine_type'] = object_type_map
+        semantic_map['object_coarse_type'] = COARSE_LOOKUP[object_type_map]
+        semantic_map['object_damages'] = property_map[:, :, 0]
+        semantic_map['object_liftable'] = property_map[:, :, 1]
+        semantic_map['object_velocity_x'] = velocity_map[:, :, 0]
+        semantic_map['object_velocity_y'] = velocity_map[:, :, 1]
+
+        # Colour shows the object where there is one, terrain otherwise, matching
+        # the render priority: objects draw over the terrain they stand on.
+        has_object = object_id_map != NO_OBJECT
+        colour_source = np.where(has_object, object_type_map, fine_type_map)
+        semantic_map['color_r'] = COLOR_LOOKUP[colour_source, 0]
+        semantic_map['color_g'] = COLOR_LOOKUP[colour_source, 1]
+        semantic_map['color_b'] = COLOR_LOOKUP[colour_source, 2]
 
         return semantic_map
+
+    @property
+    def semantic_tensor(self) -> NDArray[np.uint8]:
+        """Get the semantic map as a binary (H, W, C) tensor for learning.
+
+        Channels are binary masks rather than category ids: ids are nominal
+        labels, and feeding them as numbers would imply ENEMY (15) is "more" than
+        SOLID (1). Terrain and object channels form two groups -- within a group
+        the encoding is one-hot, across groups it is multi-hot -- so a door on
+        solid ground sets both its TERRAIN and INTERACTIVE channels.
+
+        Channel order is COARSE_TENSOR_CHANNELS. Layout is channels-last to match
+        the RGB frame observation; PyTorch users want a single permute.
+
+        Returns:
+            (15, 16, 16) uint8 array of 0/1 values.
+        """
+        return self.semantic_tensor_from(self.semantic_map)
+
+    @staticmethod
+    def semantic_tensor_from(semantic_map: NDArray[Any]) -> NDArray[np.uint8]:
+        """Build the binary tensor from an existing semantic map.
+
+        Exposed separately so callers that already hold a semantic map do not pay
+        to read every tile from SRAM a second time.
+
+        Args:
+            semantic_map: Structured array with SEMANTIC_TILE_DTYPE
+
+        Returns:
+            (15, 16, 16) uint8 array of 0/1 values.
+        """
+        terrain = semantic_map['coarse_type']
+        objects = semantic_map['object_coarse_type']
+        has_object = semantic_map['object_id'] != NO_OBJECT
+
+        tensor = np.zeros(
+            (
+                semantic_map.shape[0], semantic_map.shape[1],
+                len(COARSE_TENSOR_CHANNELS) + len(PROPERTY_CHANNEL_NAMES)
+            ),
+            dtype=np.uint8,
+        )
+
+        for channel, (layer, coarse_type) in enumerate(COARSE_TENSOR_CHANNELS):
+            if layer == 'terrain':
+                tensor[:, :, channel] = (terrain == coarse_type).astype(np.uint8)
+            else:
+                tensor[:, :, channel] = (has_object & (objects == coarse_type)).astype(np.uint8)
+
+        # Property channels: what happens if the player touches this
+        tensor[:, :, len(COARSE_TENSOR_CHANNELS)] = semantic_map['object_damages']
+        tensor[:, :, len(COARSE_TENSOR_CHANNELS) + 1] = semantic_map['object_liftable']
+
+        return tensor
+
+    @property
+    def semantic_velocity(self) -> NDArray[np.float32]:
+        """Get per-cell object velocity as a (H, W, 2) float array.
+
+        Kept separate from `semantic_tensor` so that tensor stays a pure binary
+        mask: velocity is continuous, and mixing the two would force every mask
+        to float and lose an invariant worth keeping. Concatenate them if a single
+        input array is wanted.
+
+        Without this the map is a still frame -- an agent cannot tell an enemy
+        moving towards it from one moving away.
+
+        Returns:
+            (15, 16, 2) float32 array, normalised to ~[-1, 1]. Positive X is
+            rightward, positive Y is downward (matching row order).
+        """
+        return self.semantic_velocity_from(self.semantic_map)
+
+    @staticmethod
+    def semantic_velocity_from(semantic_map: NDArray[Any]) -> NDArray[np.float32]:
+        """Build the velocity grid from an existing semantic map.
+
+        Args:
+            semantic_map: Structured array with SEMANTIC_TILE_DTYPE
+
+        Returns:
+            (15, 16, 2) float32 array, normalised to ~[-1, 1].
+        """
+        return np.stack(
+            [semantic_map['object_velocity_x'], semantic_map['object_velocity_y']],
+            axis=-1,
+        ).astype(np.float32)

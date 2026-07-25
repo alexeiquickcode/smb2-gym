@@ -83,6 +83,26 @@ class PlayerStateMixin(GameStateMixin):
         return speed if speed < 128 else speed - 256
 
     @property
+    def player_y_velocity(self) -> int:
+        """Get player vertical velocity (signed: negative=upward, positive=falling).
+
+        The counterpart to `player_speed`. Without it the player's own motion is
+        only half observable -- an agent can see that it is moving right but not
+        whether it is rising or falling, which is what decides whether a jump
+        clears a gap.
+        """
+        velocity = self._read_ram_safe(PLAYER.Y_VELOCITY)
+        return velocity if velocity < 128 else velocity - 256
+
+    # NOTE: there is deliberately no `is_airborne` here. Non-zero vertical
+    # velocity looks like a clean test for it, but it is not: on 1-3 a grounded,
+    # motionless player sits at a constant y with y_velocity == -4 for several
+    # frames before settling to 0. Deriving "on the ground" needs the game's own
+    # collision state (Player.COLLISION, $005A) rather than a velocity guess, and
+    # that has not been verified yet -- so the raw velocity is exposed and the
+    # inference is left to the caller.
+
+    @property
     def on_vine(self) -> bool:
         """Check if character is on a vine."""
         return self._read_ram_safe(PLAYER.ON_VINE) == 1
@@ -187,7 +207,8 @@ class PlayerStateMixin(GameStateMixin):
 
         current_levels_finished = self.levels_finished
         for char_name in ['mario', 'peach', 'toad', 'luigi']:
-            if current_levels_finished[char_name] > self._previous_levels_finished.get(char_name, 0):
+            if current_levels_finished[char_name] > self._previous_levels_finished.get(
+                char_name, 0
+            ):
                 return True
         return False
-

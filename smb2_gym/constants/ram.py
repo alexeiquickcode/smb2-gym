@@ -140,7 +140,8 @@ class Player:
     Y_PAGE: int = 0x001E
     Y_POSITION: int = 0x0032
     STATE: int = 0x0050
-    SPEED: int = 0x003C
+    SPEED: int = 0x003C  # X velocity (signed); slot-0 twin of EnemySlot.x_velocity
+    Y_VELOCITY: int = 0x0046  # Signed; negative is upward. Zero while grounded.
     COLLISION: int = 0x005A
     ON_VINE: int = 0x0050
     HOLDING_ITEM: int = 0x009C
@@ -241,6 +242,33 @@ LEVEL_PAGE_WIDTH = 16  # Tiles per page horizontally
 LEVEL_PAGE_HEIGHT = 15  # Tiles per page vertically
 SCREEN_TILES_WIDTH = 16  # Visible tiles horizontally
 SCREEN_TILES_HEIGHT = 15  # Visible tiles vertically (status bar excluded)
+
+# OAM (sprite) layout. SMB2 runs the PPU in 8x16 sprite mode.
+OAM_SPRITE_COUNT = 64  # Hardware OAM entries
+OAM_SPRITE_WIDTH = 8
+OAM_SPRITE_HEIGHT = 16
+PLAYER_OAM_INDICES = frozenset({8, 9, 10, 11})  # The player is always drawn here
+
+# Divisor used to normalise object velocities into roughly [-1, 1] for the
+# velocity grid. Measured over ~9.6k observed samples: X spans +/-32 and Y spans
+# -42..+81 (Trouter leaping). Most objects sit well inside that. Values are
+# clipped after scaling, so an unobserved faster object saturates rather than
+# blowing up the range.
+OBJECT_VELOCITY_SCALE = 64
+
+# Bounds used when recovering a sprite object's size from OAM. The search window
+# has to be tight enough that a neighbouring object's sprites are not merged in,
+# and the tile cap stops a bad cluster reporting one enormous object.
+OBJECT_SPRITE_MAX_WIDTH = 32  # Pixels either side of the object's anchor
+OBJECT_SPRITE_MAX_HEIGHT = 64  # Pixels below the object's anchor
+OBJECT_MAX_TILES = 4  # Largest object footprint, in tiles, per axis
+
+# Player collision box heights in pixels, keyed by state. Width is one tile.
+# The player's RAM Y (Player.Y_POSITION) is the TOP of this box; the feet sit at
+# RAM Y + height. Verified against OAM sprite bounds on horizontal levels.
+PLAYER_HEIGHT_BIG = 32  # 2+ hearts, standing
+PLAYER_HEIGHT_SMALL = 16  # 1 heart
+PLAYER_HEIGHT_DUCKING = 16  # 2+ hearts, ducking
 
 # Game mechanics
 PAGE_SIZE = 256  # Memory page size for position calculations

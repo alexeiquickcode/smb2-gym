@@ -539,6 +539,10 @@ class SuperMarioBros2Env(
                 return self._env.player_speed
 
             @property
+            def y_velocity(self) -> int:
+                return self._env.player_y_velocity
+
+            @property
             def on_vine(self) -> bool:
                 return self._env.on_vine
 
@@ -604,11 +608,15 @@ class SuperMarioBros2Env(
     def semantic(self):
         """Semantic tile map from SemanticMapMixin.
 
+        Terrain and sprite objects occupy separate fields, so a cell can report
+        both -- e.g. solid ground with a door standing on it.
+
         Returns structured numpy array (15 x 16) with fields:
             - tile_id: Raw BackgroundTile ID
-            - fine_type: Fine-grained FineTileType (SOLID, ENEMY, etc.)
-            - coarse_type: Coarse-grained CoarseTileType (TERRAIN, ENEMY, etc.)
-            - color_r, color_g, color_b: RGB visualisation colour
+            - fine_type / coarse_type: the TERRAIN in this cell
+            - object_id: EnemyId of the sprite here, or NO_OBJECT (0xFF)
+            - object_fine_type / object_coarse_type: that sprite's classification
+            - color_r, color_g, color_b: RGB colour, object drawn over terrain
         """
         return self.semantic_map
 
@@ -619,12 +627,18 @@ class SuperMarioBros2Env(
         Returns:
             dict with organized game state using accessor objects
         """
+        # Derive the tensor from the map we already built: reading every tile
+        # from SRAM is the expensive part and must not happen twice per step.
+        semantic = self.semantic
+
         return {
             'pc': self.pc,
             'pos': self.pos,
             'game': self.game,
             'enemies': self.enemies,
-            'semantic': self.semantic,
+            'semantic': semantic,
+            'semantic_tensor': self.semantic_tensor_from(semantic),
+            'semantic_velocity': self.semantic_velocity_from(semantic),
         }
 
     def _detect_life_loss(self) -> bool:

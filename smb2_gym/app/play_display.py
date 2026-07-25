@@ -5,7 +5,11 @@ import pygame
 
 from smb2_gym.app.info_display import create_info_panel
 from smb2_gym.app.rendering import render_frame
-from smb2_gym.constants import TILE_COLORS, FineTileType
+from smb2_gym.constants import (
+    NO_OBJECT,
+    TILE_COLORS,
+    FineTileType,
+)
 from smb2_gym.smb2_env import SuperMarioBros2Env
 
 
@@ -18,27 +22,37 @@ def draw_semantic_map(
 ) -> None:
     """Draw the semantic tile map on the surface.
 
+    Terrain is drawn first and sprite objects over the top, matching the layering
+    in the data: a cell holding both shows the object's colour with a ring of the
+    terrain underneath, so "door standing on ground" is visible as both.
+
     Args:
-        semantic_map: Structured array with 'fine_type', 'color_r', 'color_g', 'color_b' fields
+        semantic_map: Structured array with SEMANTIC_TILE_DTYPE
     """
     height, width = semantic_map.shape
 
     for y in range(height):
         for x in range(width):
+            cell = semantic_map[y, x]
 
-            # Get colours
-            color = (
-                int(semantic_map[y, x]['color_r']),
-                int(semantic_map[y, x]['color_g']),
-                int(semantic_map[y, x]['color_b']),
-            )
-
-            # Calculate position
             screen_y = y * tile_size + y_offset
             screen_x = x * tile_size + x_offset
-
             rect = pygame.Rect(screen_x, screen_y, tile_size, tile_size)
-            pygame.draw.rect(surface, color, rect)
+
+            # Terrain layer
+            terrain_type = FineTileType(int(cell['fine_type']))
+            pygame.draw.rect(surface, TILE_COLORS.get(terrain_type, (200, 200, 200)), rect)
+
+            # Object layer, inset so the terrain stays visible around it
+            if int(cell['object_id']) != NO_OBJECT:
+                object_type = FineTileType(int(cell['object_fine_type']))
+                inset = max(2, tile_size // 6)
+                pygame.draw.rect(
+                    surface,
+                    TILE_COLORS.get(object_type, (255, 0, 0)),
+                    rect.inflate(-inset * 2, -inset * 2),
+                )
+
             pygame.draw.rect(surface, (0, 0, 0), rect, 1)  # Black border
 
 
