@@ -148,15 +148,18 @@ def create_info_panel(
         ("Level", game.level, "World", str(game.world)),
         ("Area", f"{pos.area}-{pos.sub_area}", "Subspace Status", str(pc.subspace_status)),
         (
-            "Local (X, Y)", f"({pos.x_local}, {pos.y_local})", "Global (X, Y)",
-            f"({pos.x_global}, {pos.y_global})"
+            "Local (X, Y)",
+            f"({pos.x_local}, {pos.y_local})",
+            "Global (X, Y)",
+            f"({pos.x_global}, {pos.y_global})",
         ),
         (
-            "Page (X, Y)", f"({pos.x_page}, {pos.y_page})", "Current/Total",
-            f"{pos.current_page}/{pos.total_pages}"
+            "Page (X, Y)",
+            f"({pos.x_page}, {pos.y_page})",
+            "Current/Total",
+            f"{pos.current_page}/{pos.total_pages}",
         ),
         ("Vertical Area", "Yes" if pos.is_vertical else "No", "Spawn Page", str(pos.spawn_page)),
-
         # PLAYER SECTION
         ("PLAYER", "", "", ""),
         ("Character", CHARACTER_NAMES.get(pc.character, 'Unknown'), "Lives", str(pc.lives)),
@@ -164,50 +167,79 @@ def create_info_panel(
         ("Cherries", str(pc.cherries), "Coins", str(pc.coins)),
         ("Holding Item", "Yes" if pc.holding_item else "No", "Item Pulled", str(pc.item_pulled)),
         (
-            "Big Veggies Pulled", str(pc.big_vegetables_pulled), "On Vine",
-            "Yes" if pc.on_vine else "No"
+            "Big Veggies Pulled",
+            str(pc.big_vegetables_pulled),
+            "On Vine",
+            "Yes" if pc.on_vine else "No",
         ),
         ("Starman Timer", str(pc.starman_timer), "Subspace Timer", str(pc.subspace_timer)),
-        ("Stopwatch Timer", str(pc.stopwatch_timer), "Float Timer", f"{pc.float_timer}/60"),
         (
-            "Invuln Timer", str(pc.invulnerability_timer), "Door Timer",
-            str(pc.door_transition_timer)
+            "Stopwatch Timer",
+            str(pc.stopwatch_timer),
+            "Float Timer",
+            f"{pc.float_timer}/{pc.float_length}",
         ),
         (
-            "Level Completed", "Yes" if pc.level_completed else "No", "Player State",
+            "Invuln Timer",
+            str(pc.invulnerability_timer),
+            "Door Timer",
+            str(pc.door_transition_timer),
+        ),
+        (
+            "Level Completed",
+            "Yes" if pc.level_completed else "No",
+            "Player State",
             PlayerState(pc.state).name
-            if pc.state in [ps.value for ps in PlayerState] else str(pc.state)
+            if pc.state in [ps.value for ps in PlayerState]
+            else str(pc.state),
         ),
         (
-            "Mario Levels", str(pc.levels_finished['mario']), "Luigi Levels",
-            str(pc.levels_finished['luigi'])
+            "Mario Levels",
+            str(pc.levels_finished['mario']),
+            "Luigi Levels",
+            str(pc.levels_finished['luigi']),
         ),
         (
-            "Peach Levels", str(pc.levels_finished['peach']), "Toad Levels",
-            str(pc.levels_finished['toad'])
+            "Peach Levels",
+            str(pc.levels_finished['peach']),
+            "Toad Levels",
+            str(pc.levels_finished['toad']),
         ),
-
         # ENEMIES SECTION
         ("ENEMIES", "", "", ""),
         (
-            "Slot", "Name", "HP", "(X, Y)", "Rel (X, Y)", "Vel (X, Y)", "State", "Timer", "Flags",
-            "Collision"
+            "Slot",
+            "Name",
+            "HP",
+            "(X, Y)",
+            "Rel (X, Y)",
+            "Vel (X, Y)",
+            "State",
+            "Timer",
+            "Flags",
+            "Collision",
         ),
-
         # Enemy table - all 9 slots, one row per enemy
         *[
             (
-                f"{e.slot_number}", format_enemy_name(e.object_type),
-                str(e.health) if e.health is not None else "", f"({e.x_position}, {e.y_position})"
-                if e.x_position is not None and e.y_position is not None else "",
+                f"{e.slot_number}",
+                format_enemy_name(e.object_type),
+                str(e.health) if e.health is not None else "",
+                f"({e.x_position}, {e.y_position})"
+                if e.x_position is not None and e.y_position is not None
+                else "",
                 f"({e.relative_x(pos.x_global)}, {e.relative_y(pos.y_global)})"
                 if e.relative_x(pos.x_global) is not None and e.relative_y(pos.y_global) is not None
-                else "", f"({e.x_velocity}, {e.y_velocity})"
-                if e.x_velocity is not None and e.y_velocity is not None else "",
+                else "",
+                f"({e.x_velocity}, {e.y_velocity})"
+                if e.x_velocity is not None and e.y_velocity is not None
+                else "",
                 format_enemy_state(e.state, e.object_type is not None),
                 str(e.object_timer) if e.object_timer is not None else "",
-                format_sprite_flags(e.sprite_flags), format_collision_flags(e.collision)
-            ) for e in enemies
+                format_sprite_flags(e.sprite_flags),
+                format_collision_flags(e.collision),
+            )
+            for e in enemies
         ],
     ]
 
@@ -216,7 +248,7 @@ def create_info_panel(
 
     for i, row in enumerate(data):
         # Check if this is a section header (4-column row with empty strings in cols 2-4)
-        is_section_header = (len(row) == 4 and row[1] == "" and row[2] == "" and row[3] == "")
+        is_section_header = len(row) == 4 and row[1] == "" and row[2] == "" and row[3] == ""
 
         # Draw line before section header
         if is_section_header:
@@ -241,7 +273,7 @@ def create_info_panel(
                 int(base_width * 0.8),  # State - VISIBLE, INVISIBLE, DEAD
                 int(base_width * 0.5),  # Timer
                 int(base_width * 1.4),  # Flags
-                int(base_width * 1.4)  # Collision
+                int(base_width * 1.4),  # Collision
             ]
 
             x_offset = x_start
@@ -275,8 +307,11 @@ def create_info_panel(
         # Draw line after section headers and enemy table header (but not between enemy slots)
         if is_section_header or i == 15:  # After section headers or enemy table header only
             pygame.draw.line(
-                screen, (60, 60, 60), (x_start, current_y + 2),
-                (screen_width - padding, current_y + 2), 1
+                screen,
+                (60, 60, 60),
+                (x_start, current_y + 2),
+                (screen_width - padding, current_y + 2),
+                1,
             )
             current_y += 6
 

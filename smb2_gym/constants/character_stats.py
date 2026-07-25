@@ -147,4 +147,3 @@ def get_character_stats(character_id: int) -> CharacterStats:
     if character_id not in CHARACTER_STATS:
         raise ValueError(f"Invalid character_id {character_id}. Must be 0-3.")
     return CHARACTER_STATS[character_id]
-

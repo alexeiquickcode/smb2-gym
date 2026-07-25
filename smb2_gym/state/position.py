@@ -161,15 +161,18 @@ class PositionMixin(GameStateMixin):
         current_y = self._y_position_global_raw()
 
         # Check if we're in a transition state where sub_area changed but coordinates haven't
-        if (self._previous_sub_area is not None and \
-            self._previous_x_global is not None and
-            self._previous_y_global is not None):
-
+        if (
+            self._previous_sub_area is not None
+            and self._previous_x_global is not None
+            and self._previous_y_global is not None
+        ):
             # Detect new transition
-            if (self._transition_frame_count == 0 and \
-                current_sub_area != self._previous_sub_area and \
-                current_x == self._previous_x_global and
-                current_y == self._previous_y_global):
+            if (
+                self._transition_frame_count == 0
+                and current_sub_area != self._previous_sub_area
+                and current_x == self._previous_x_global
+                and current_y == self._previous_y_global
+            ):
                 self._transition_frame_count = 1
                 current_sub_area = self._previous_sub_area
 
@@ -189,4 +192,3 @@ class PositionMixin(GameStateMixin):
             global_x=current_x,
             global_y=current_y,
         )
-

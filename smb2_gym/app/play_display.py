@@ -1,139 +1,352 @@
-"""Display and rendering functions for human play interface."""
+"""Display orchestration for the human play interface.
+
+`PlayUI` owns the window and all view state (which panels are open, the active
+stats tab, the toast queue) and redraws the whole interface each frame from the
+current window size, so resizing needs no special handling beyond recomputing
+the layout.
+"""
+
+from typing import (
+    Any,
+)
 
 import numpy as np
 import pygame
 
-from smb2_gym.app.info_display import create_info_panel
-from smb2_gym.app.rendering import render_frame
-from smb2_gym.constants import TILE_COLORS, FineTileType
+from smb2_gym.app.layout import (
+    MIN_WINDOW,
+    Layout,
+    PanelVisibility,
+    compute_layout,
+    compute_ui_scale,
+)
+from smb2_gym.app.options import (
+    OPTION_HOTKEYS,
+    OptionsMenu,
+    Settings,
+    draw_options_overlay,
+    format_fps,
+)
+from smb2_gym.app.panels import (
+    draw_game_panel,
+    draw_help_overlay,
+    draw_legend_panel,
+    draw_semantic_panel,
+    draw_status_bar,
+    draw_toast,
+)
+from smb2_gym.app.stats_panel import (
+    TABS,
+    draw_stats_panel,
+)
+from smb2_gym.app.theme import (
+    BG,
+    Fonts,
+    Metrics,
+)
+from smb2_gym.constants import CHARACTER_NAMES
 from smb2_gym.smb2_env import SuperMarioBros2Env
 
 
-def draw_semantic_map(
-    surface: pygame.Surface,
-    semantic_map: np.ndarray,
-    x_offset: int,
-    y_offset: int,
-    tile_size: int,
-) -> None:
-    """Draw the semantic tile map on the surface.
+TOAST_SECONDS = 2.0
 
-    Args:
-        semantic_map: Structured array with 'fine_type', 'color_r', 'color_g', 'color_b' fields
-    """
-    height, width = semantic_map.shape
 
-    for y in range(height):
-        for x in range(width):
+class PlayUI:
+    """Stateful renderer for the human-play window."""
 
-            # Get colours
-            color = (
-                int(semantic_map[y, x]['color_r']),
-                int(semantic_map[y, x]['color_g']),
-                int(semantic_map[y, x]['color_b']),
+    def __init__(self, width: int, height: int, caption: str = "Super Mario Bros 2") -> None:
+        self.screen = pygame.display.set_mode(
+            (max(width, MIN_WINDOW[0]), max(height, MIN_WINDOW[1])), pygame.RESIZABLE
+        )
+        pygame.display.set_caption(caption)
+
+        self.caption = caption
+        self.visibility = PanelVisibility()
+        self.active_tab = 0
+        self.fullscreen = False
+        self._windowed_size = self.screen.get_size()
+
+        self.settings = Settings()
+        self.options = OptionsMenu()
+        self.show_options = False
+
+        self._toast_message = ""
+        self._toast_remaining = 0.0
+
+        self._ui_scale = 0.0
+        self.metrics = Metrics()
+        self.fonts: Fonts | None = None
+        self._tab_rects: list[pygame.Rect] = []
+        self._sync_scale(force=True)
+
+    # ---- Window state ------------------------------------------------
+
+    def handle_resize(self, width: int, height: int) -> None:
+        """Adopt a new window size reported by the windowing system.
+
+        This must NOT call `set_mode`. Under a RESIZABLE window SDL has already
+        resized the surface by the time the event arrives, and calling
+        `set_mode` here makes SDL emit a fresh VIDEORESIZE, which lands back in
+        this handler - an endless resize loop. Tiling compositors (Hyprland,
+        sway, i3) hit it immediately because they force the window size and
+        re-assert it against every mode change we make.
+        """
+        del width, height  # the surface is the source of truth, not the event
+        if not self.fullscreen:
+            self._windowed_size = self.screen.get_size()
+        self._sync_scale()
+
+    def toggle_fullscreen(self) -> None:
+        """Switch between fullscreen and the last windowed size.
+
+        Uses borderless desktop fullscreen rather than a real video-mode
+        change: it is instant, it never alters the user's screen resolution,
+        and it is what tiling compositors expect. Under a tiler the request may
+        simply be ignored, which is fine - the layout follows whatever size we
+        end up with.
+        """
+        self.fullscreen = not self.fullscreen
+        try:
+            if self.fullscreen:
+                self._windowed_size = self.screen.get_size()
+                self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN | pygame.SCALED)
+            else:
+                self.screen = pygame.display.set_mode(self._windowed_size, pygame.RESIZABLE)
+        except pygame.error:
+            # Some compositors refuse the mode change; stay where we are
+            self.fullscreen = not self.fullscreen
+            self.toast("Fullscreen unavailable")
+            return
+        self._sync_scale()
+        self.toast("Fullscreen on" if self.fullscreen else "Fullscreen off")
+
+    def _sync_scale(self, force: bool = False) -> None:
+        """Rebuild fonts and metrics when the window size changes the UI scale."""
+        width, height = self.screen.get_size()
+        scale = compute_ui_scale(width, height)
+        if force or abs(scale - self._ui_scale) > 0.01 or self.fonts is None:
+            self._ui_scale = scale
+            self.metrics = Metrics(ui_scale=scale)
+            if self.fonts is None:
+                self.fonts = Fonts(scale)
+            else:
+                self.fonts.rebuild(scale)
+
+    # ---- View state --------------------------------------------------
+
+    def toggle_panel(self, name: str) -> None:
+        """Toggle a named panel and confirm it with a toast."""
+        current = getattr(self.visibility, name)
+        setattr(self.visibility, name, not current)
+        labels = {
+            "semantic_map": "Semantic map",
+            "legend": "Legend",
+            "stats": "Stats panel",
+            "help": "Help",
+        }
+        if name != "help":
+            self.toast(f"{labels.get(name, name)} {'shown' if not current else 'hidden'}")
+
+    def next_tab(self, step: int = 1) -> None:
+        """Move to the next (or previous) stats tab."""
+        self.active_tab = (self.active_tab + step) % len(TABS)
+        if not self.visibility.stats:
+            self.visibility.stats = True
+
+    @property
+    def blocks_input(self) -> bool:
+        """Whether an overlay is capturing input, so the game must hold still.
+
+        Both overlays cover the window and share letter keys with the game, so
+        stepping the emulator behind them would feed the menu's keys to Mario.
+        """
+        return self.show_options or self.visibility.help
+
+    def toggle_options(self) -> None:
+        """Open or close the options menu."""
+        self.show_options = not self.show_options
+        if self.show_options:
+            # The two full-window overlays would otherwise stack on each other.
+            self.visibility.help = False
+
+    def handle_options_key(self, key: int) -> bool:
+        """Handle a key while the options menu is open.
+
+        Returns:
+            True if the key was consumed, so the caller does not also treat it
+            as a global hotkey - otherwise `S`, `C` and `G` would fight with the
+            panel toggles underneath.
+        """
+        if not self.show_options:
+            return False
+
+        # Arrow keys navigate; letters activate their option directly. `S` is
+        # the integer-scaling hotkey, so it must not double as "move down".
+        if key == pygame.K_UP:
+            self.options.move(-1)
+        elif key == pygame.K_DOWN:
+            self.options.move(1)
+        elif key in (pygame.K_RIGHT, pygame.K_RETURN, pygame.K_SPACE):
+            self.toast(self.options.activate(self.settings, 1))
+        elif key == pygame.K_LEFT:
+            self.toast(self.options.activate(self.settings, -1))
+        elif key in (pygame.K_PLUS, pygame.K_EQUALS, pygame.K_KP_PLUS):
+            self.settings.cycle_fps(1)
+            self.toast(f"Frame rate: {format_fps(self.settings.target_fps)}")
+        elif key in (pygame.K_MINUS, pygame.K_KP_MINUS):
+            self.settings.cycle_fps(-1)
+            self.toast(f"Frame rate: {format_fps(self.settings.target_fps)}")
+        elif key in OPTION_HOTKEYS:
+            self.toast(self.options.activate_index(OPTION_HOTKEYS[key], self.settings))
+        elif key == pygame.K_ESCAPE:
+            self.show_options = False
+        else:
+            return False
+        return True
+
+    def handle_click(self, pos: tuple[int, int]) -> None:
+        """Route a mouse click to the options menu or the stats tabs."""
+        if self.show_options:
+            message = self.options.handle_click(pos, self.settings)
+            if message:
+                self.toast(message)
+            return
+
+        for i, rect in enumerate(self._tab_rects):
+            if rect.collidepoint(pos):
+                self.active_tab = i
+                return
+
+    def toast(self, message: str) -> None:
+        """Show a transient message at the bottom of the window."""
+        self._toast_message = message
+        self._toast_remaining = TOAST_SECONDS
+
+    # ---- Frame -------------------------------------------------------
+
+    def render(
+        self,
+        obs: np.ndarray,
+        env: SuperMarioBros2Env,
+        info: dict[str, Any],
+        *,
+        paused: bool,
+        game_over: bool,
+        fps: float,
+        dt: float,
+    ) -> None:
+        """Draw one full frame of the interface."""
+        # Re-derive the scale from the live surface every frame. Resize events
+        # differ between SDL versions and window managers (VIDEORESIZE,
+        # WINDOWRESIZED, or under some compositors none at all), so the surface
+        # itself is the only reliable source of the current size.
+        self._sync_scale()
+        assert self.fonts is not None
+        width, height = self.screen.get_size()
+        self.screen.fill(BG)
+
+        semantic_map = env.semantic_map
+        layout = compute_layout(
+            width,
+            height,
+            self.visibility,
+            self.metrics,
+            map_shape=(semantic_map.shape[0], semantic_map.shape[1]),
+        )
+
+        self._draw_status(layout, info, paused=paused, game_over=game_over, fps=fps)
+
+        draw_game_panel(
+            self.screen,
+            layout.game_card,
+            layout.game_view,
+            obs,
+            self.fonts,
+            self.metrics,
+            paused=paused,
+            game_over=game_over,
+            integer_scaling=self.settings.integer_scaling,
+        )
+
+        if layout.semantic_card is not None:
+            draw_semantic_panel(
+                self.screen,
+                layout.semantic_card,
+                self.fonts,
+                self.metrics,
+                semantic_map,
+                env.get_player_collision_tiles(),
+                layout.tile_size,
+                show_collision=self.settings.show_collision,
+                show_grid=self.settings.show_grid,
             )
 
-            # Calculate position
-            screen_y = y * tile_size + y_offset
-            screen_x = x * tile_size + x_offset
+        if layout.legend_card is not None:
+            draw_legend_panel(self.screen, layout.legend_card, self.fonts, self.metrics)
 
-            rect = pygame.Rect(screen_x, screen_y, tile_size, tile_size)
-            pygame.draw.rect(surface, color, rect)
-            pygame.draw.rect(surface, (0, 0, 0), rect, 1)  # Black border
+        if layout.stats_card is not None:
+            self._tab_rects = draw_stats_panel(
+                self.screen,
+                layout.stats_card,
+                self.fonts,
+                self.metrics,
+                info,
+                self.active_tab,
+            )
+        else:
+            self._tab_rects = []
 
+        self._draw_toast(layout, dt)
 
-def draw_player_position(
-    surface: pygame.Surface,
-    env: SuperMarioBros2Env,
-    x_offset: int,
-    y_offset: int,
-    tile_size: int,
-) -> None:
-    """Draw player position on the collision map."""
-    # Get player collision tiles from the environment
-    player_tiles = env.get_player_collision_tiles()
+        if self.visibility.help:
+            draw_help_overlay(self.screen, layout.window, self.fonts, self.metrics)
 
-    for tile_x, tile_y in player_tiles:
-        screen_x = tile_x * tile_size + x_offset + tile_size // 2
-        screen_y = tile_y * tile_size + y_offset + tile_size // 2
-        pygame.draw.circle(surface, (255, 255, 255), (screen_x, screen_y), tile_size // 3)
-        pygame.draw.circle(surface, (255, 0, 0), (screen_x, screen_y), tile_size // 3, 2)
+        if self.show_options:
+            draw_options_overlay(
+                self.screen,
+                layout.window,
+                self.fonts,
+                self.metrics,
+                self.settings,
+                self.options,
+            )
 
+        pygame.display.flip()
 
-def draw_legend(
-    surface: pygame.Surface,
-    font: pygame.font.Font,
-    x_offset: int,
-    y_offset: int,
-) -> None:
-    """Draw a legend for semantic tile types."""
-    y_pos = y_offset
+    def _draw_status(
+        self,
+        layout: Layout,
+        info: dict[str, Any],
+        *,
+        paused: bool,
+        game_over: bool,
+        fps: float,
+    ) -> None:
+        """Draw the top status bar from the current game info."""
+        assert self.fonts is not None
+        pc, game = info['pc'], info['game']
+        draw_status_bar(
+            self.screen,
+            layout.status,
+            self.fonts,
+            self.metrics,
+            title=self.caption,
+            level=f"World {game.world} · {game.level}",
+            character=CHARACTER_NAMES.get(pc.character, "Unknown"),
+            lives=pc.lives,
+            hearts=pc.hearts,
+            coins=pc.coins,
+            fps=fps,
+            paused=paused,
+            game_over=game_over,
+        )
 
-    for tile_type in FineTileType:
-        if tile_type == FineTileType.EMPTY:
-            continue
-
-        color = TILE_COLORS.get(tile_type, (128, 128, 128))
-
-        # Draw colour box
-        rect = pygame.Rect(x_offset, y_pos, 16, 16)
-        pygame.draw.rect(surface, color, rect)
-        pygame.draw.rect(surface, (0, 0, 0), rect, 1)
-
-        # Draw text using enum name
-        text = font.render(tile_type.name, True, (255, 255, 255))
-        surface.blit(text, (x_offset + 20, y_pos))
-
-        y_pos += 20
-
-
-def render_all(
-    screen: pygame.Surface,
-    obs: np.ndarray,
-    env: SuperMarioBros2Env,
-    info: dict,
-    game_width: int,
-    game_height: int,
-    total_width: int,
-    total_height: int,
-    font: pygame.font.Font,
-    small_font: pygame.font.Font,
-    paused: bool,
-) -> None:
-    """Render all game elements to screen."""
-    # Clear screen
-    screen.fill((40, 40, 40))
-
-    # Render game on the left side
-    game_surface = pygame.Surface((game_width, game_height))
-    render_frame(game_surface, obs, game_width, game_height)
-    screen.blit(game_surface, (10, 10))
-
-    # Get and render semantic map on the right side
-    semantic_map = env.semantic_map
-    map_x_offset = game_width + 30
-    map_y_offset = 10
-    tile_size = 20
-
-    draw_semantic_map(screen, semantic_map, map_x_offset, map_y_offset, tile_size)
-    draw_player_position(screen, env, map_x_offset, map_y_offset, tile_size)
-
-    # Draw semantic map title
-    title_text = font.render("Semantic Map", True, (255, 255, 255))
-    screen.blit(title_text, (map_x_offset, map_y_offset - 30))
-
-    # Draw legend
-    legend_x = map_x_offset + (16 * tile_size) + 10
-    legend_y = map_y_offset
-    legend_title = small_font.render("Legend:", True, (255, 255, 255))
-    screen.blit(legend_title, (legend_x, legend_y))
-    draw_legend(screen, small_font, legend_x, legend_y + 20)
-
-    # Draw game info panel at bottom
-    create_info_panel(screen, info, font, total_height, total_width)
-
-    # Draw pause indicator
-    if paused:
-        pause_text = font.render("PAUSED", True, (255, 255, 0))
-        text_rect = pause_text.get_rect(center=(total_width // 2, total_height // 2))
-        screen.blit(pause_text, text_rect)
+    def _draw_toast(self, layout: Layout, dt: float) -> None:
+        """Draw and age out the current toast message."""
+        assert self.fonts is not None
+        if self._toast_remaining <= 0:
+            return
+        self._toast_remaining = max(0.0, self._toast_remaining - dt)
+        # Hold at full opacity, then fade over the last half second
+        alpha = min(1.0, self._toast_remaining / 0.5)
+        draw_toast(self.screen, layout.window, self.fonts, self.metrics, self._toast_message, alpha)

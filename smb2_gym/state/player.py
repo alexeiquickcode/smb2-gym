@@ -83,6 +83,26 @@ class PlayerStateMixin(GameStateMixin):
         return speed if speed < 128 else speed - 256
 
     @property
+    def player_y_velocity(self) -> int:
+        """Get player vertical velocity (signed: negative=upward, positive=falling).
+
+        The counterpart to `player_speed`. Without it the player's own motion is
+        only half observable -- an agent can see that it is moving right but not
+        whether it is rising or falling, which is what decides whether a jump
+        clears a gap.
+        """
+        velocity = self._read_ram_safe(PLAYER.Y_VELOCITY)
+        return velocity if velocity < 128 else velocity - 256
+
+    # NOTE: there is deliberately no `is_airborne` here. Non-zero vertical
+    # velocity looks like a clean test for it, but it is not: on 1-3 a grounded,
+    # motionless player sits at a constant y with y_velocity == -4 for several
+    # frames before settling to 0. Deriving "on the ground" needs the game's own
+    # collision state (Player.COLLISION, $005A) rather than a velocity guess, and
+    # that has not been verified yet -- so the raw velocity is exposed and the
+    # inference is left to the caller.
+
+    @property
     def on_vine(self) -> bool:
         """Check if character is on a vine."""
         return self._read_ram_safe(PLAYER.ON_VINE) == 1
@@ -150,14 +170,31 @@ class PlayerStateMixin(GameStateMixin):
         return self._read_ram_safe(TIMERS.FRAMERULE)
 
     @property
+    def pidgit_carpet_timer(self) -> int:
+        """Get time left on Pidgit's magic carpet (0 when not riding one)."""
+        return self._read_ram_safe(TIMERS.PIDGIT_CARPET)
+
+    @property
     def pidget_carpet_timer(self) -> int:
-        """Get time left to use Pidget's carpet."""
-        return self._read_ram_safe(TIMERS.PIDGET_CARPET)
+        """Deprecated misspelling of `pidgit_carpet_timer`."""
+        return self.pidgit_carpet_timer
 
     @property
     def float_timer(self) -> int:
-        """Get Princess float timer (available float time, max 60 frames = 1 second)."""
+        """Get frames of float remaining, counting 60 -> 0 while Peach floats.
+
+        Reads 0 whenever she is not floating, and for every other character.
+        """
         return self._read_ram_safe(TIMERS.FLOAT)
+
+    @property
+    def float_length(self) -> int:
+        """Get Peach's total float budget in frames (60 for her, 0 for others).
+
+        A static per-character parameter (`JumpFloatLength` in the
+        disassembly), not a countdown - see `float_timer` for the live value.
+        """
+        return self._read_ram_safe(TIMERS.FLOAT_LENGTH)
 
     @property
     def door_transition_timer(self) -> int:
@@ -187,7 +224,8 @@ class PlayerStateMixin(GameStateMixin):
 
         current_levels_finished = self.levels_finished
         for char_name in ['mario', 'peach', 'toad', 'luigi']:
-            if current_levels_finished[char_name] > self._previous_levels_finished.get(char_name, 0):
+            if current_levels_finished[char_name] > self._previous_levels_finished.get(
+                char_name, 0
+            ):
                 return True
         return False
-

@@ -3,7 +3,6 @@
 import os
 from typing import (
     Any,
-    Optional,
 )
 
 import gymnasium as gym
@@ -54,18 +53,20 @@ class SuperMarioBros2Env(
     """
 
     # Number of frames to wait during area transitions before accepting new coordinates
-    AREA_TRANSITION_FRAMES: int = 98  # TODO: Perhaps we can detect this when the sub-space door despawns?
+    AREA_TRANSITION_FRAMES: int = (
+        98  # TODO: Perhaps we can detect this when the sub-space door despawns?
+    )
 
     def __init__(
         self,
         init_config: InitConfig,
-        render_mode: Optional[str] = None,
-        max_episode_steps: Optional[int] = None,
+        render_mode: str | None = None,
+        max_episode_steps: int | None = None,
         action_type: ActionType = "simple",
         reset_on_life_loss: bool = False,
-        render_fps: Optional[int] = None,
+        render_fps: int | None = None,
         frame_method: str = "rgb",
-        env_name: Optional[str] = None,
+        env_name: str | None = None,
     ):
         """Initialize the SMB2 environment.
 
@@ -82,12 +83,12 @@ class SuperMarioBros2Env(
         """
         super().__init__()
 
-        self.render_mode: Optional[str] = render_mode
-        self.max_episode_steps: Optional[int] = max_episode_steps
+        self.render_mode: str | None = render_mode
+        self.max_episode_steps: int | None = max_episode_steps
         self.reset_on_life_loss: bool = reset_on_life_loss
         self.init_config: InitConfig = init_config
-        self.render_fps: Optional[int] = render_fps
-        self.env_name: Optional[str] = env_name
+        self.render_fps: int | None = render_fps
+        self.env_name: str | None = env_name
         if self.env_name:
             print(f'Creating {self.env_name} environment...')
 
@@ -100,9 +101,9 @@ class SuperMarioBros2Env(
         self.frame_method: str = frame_method
 
         # Store relevant attributes (only meaningful for built-in ROM mode)
-        self.starting_level: Optional[str]
-        self.starting_level_id: Optional[int]
-        self.starting_character: Optional[int]
+        self.starting_level: str | None
+        self.starting_level_id: int | None
+        self.starting_character: int | None
 
         if not self.init_config.rom_path:  # Built-in ROM mode
             self.starting_level = self.init_config.level
@@ -177,13 +178,13 @@ class SuperMarioBros2Env(
         """Initialize state tracking variables."""
         self._done: bool = False
         self._episode_steps: int = 0
-        self._previous_lives: Optional[int] = None  # Track lives to detect life loss
-        self._previous_levels_finished: Optional[dict[str, int]] = {}  # Track level completion
-        self._previous_sub_area: Optional[int] = None  # Track sub-area for transition detection
-        self._previous_x_global: Optional[int] = None  # Track x position for transition detection
-        self._previous_y_global: Optional[int] = None  # Track y position for transition detection
+        self._previous_lives: int | None = None  # Track lives to detect life loss
+        self._previous_levels_finished: dict[str, int] | None = {}  # Track level completion
+        self._previous_sub_area: int | None = None  # Track sub-area for transition detection
+        self._previous_x_global: int | None = None  # Track x position for transition detection
+        self._previous_y_global: int | None = None  # Track y position for transition detection
         self._transition_frame_count: int = 0  # Count frames since transition detected
-        self._last_obs: Optional[np.ndarray] = None  # Track last observation for rendering
+        self._last_obs: np.ndarray | None = None  # Track last observation for rendering
 
     def _init_rendering(self) -> None:
         """Initialize pygame rendering when first needed."""
@@ -192,6 +193,7 @@ class SuperMarioBros2Env(
 
         # Lazy load this, we don't need for non rendered envs
         import pygame
+
         pygame.init()
 
         from .app.info_display import get_required_info_height
@@ -221,8 +223,8 @@ class SuperMarioBros2Env(
     def reset(
         self,
         *,
-        seed: Optional[int] = None,
-        options: Optional[dict[str, Any]] = None,
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
     ) -> tuple[np.ndarray, dict[str, Any]]:
         """Reset the environment by loading a save state.
 
@@ -275,6 +277,14 @@ class SuperMarioBros2Env(
 
         info = self.info
 
+        # Same keys as `step`, so the info schema never changes shape. `cycles`
+        # comes from the emulator's own step info, which reset never produces.
+        info.setdefault('cycles', 0)
+        info['life_lost'] = False
+        info['end_reason'] = None
+        info['level_completed'] = False
+        info['game_over'] = False
+
         # Initialize tracking for detecting life loss and level completion
         self._previous_lives = self.lives
         self._previous_levels_finished = self.levels_finished.copy()
@@ -319,8 +329,10 @@ class SuperMarioBros2Env(
 
         # 3. Check for life loss and update tracking
         life_lost = self._detect_life_loss()
-        if life_lost:
-            info['life_lost'] = True
+        # Always present, never conditional: vectorised wrappers assume a stable
+        # set of info keys, and `info['life_lost']` used to raise KeyError on
+        # every step where it happened to be False.
+        info['life_lost'] = life_lost
 
         # Update tracking for next step
         self._previous_lives = self.lives
@@ -333,10 +345,28 @@ class SuperMarioBros2Env(
         self._previous_y_global = global_coords.global_y
 
         # 4. Check termination
-        terminated = self.game.is_game_over or life_lost or self.level_completed
+        game_over = self.game.is_game_over
+        level_completed = self.level_completed
+        terminated = game_over or life_lost or level_completed
         truncated = (
             self.max_episode_steps is not None and self._episode_steps >= self.max_episode_steps
         )
+
+        # Why the episode ended. `terminated` alone conflates winning with
+        # dying, so a reward function cannot tell success from failure.
+        if level_completed:
+            end_reason = 'level_completed'
+        elif game_over:
+            end_reason = 'game_over'
+        elif life_lost:
+            end_reason = 'life_lost'
+        elif truncated:
+            end_reason = 'max_steps'
+        else:
+            end_reason = None
+        info['end_reason'] = end_reason
+        info['level_completed'] = level_completed
+        info['game_over'] = game_over
 
         self._done = terminated or truncated
         reward = 0.0  # Always return 0 reward
@@ -347,7 +377,7 @@ class SuperMarioBros2Env(
 
         return np.array(obs), reward, terminated, truncated, info
 
-    def render(self) -> Optional[np.ndarray]:
+    def render(self) -> np.ndarray | None:
         """Render the environment.
 
         Returns:
@@ -406,7 +436,6 @@ class SuperMarioBros2Env(
         """Position and coordinate properties from PositionMixin."""
 
         class PositionAccessor:
-
             def __init__(self, env):
                 self._env = env
 
@@ -469,7 +498,6 @@ class SuperMarioBros2Env(
         """World and level state properties from PositionMixin."""
 
         class GameAccessor:
-
             def __init__(self, env):
                 self._env = env
 
@@ -494,7 +522,6 @@ class SuperMarioBros2Env(
         """Player character state properties from PlayerStateMixin."""
 
         class PlayerCharacterAccessor:
-
             def __init__(self, env):
                 self._env = env
 
@@ -539,6 +566,10 @@ class SuperMarioBros2Env(
                 return self._env.player_speed
 
             @property
+            def y_velocity(self) -> int:
+                return self._env.player_y_velocity
+
+            @property
             def on_vine(self) -> bool:
                 return self._env.on_vine
 
@@ -563,12 +594,21 @@ class SuperMarioBros2Env(
                 return self._env.framerule_timer
 
             @property
+            def pidgit_carpet_timer(self) -> int:
+                return self._env.pidgit_carpet_timer
+
+            @property
             def pidget_carpet_timer(self) -> int:
-                return self._env.pidget_carpet_timer
+                """Deprecated misspelling of `pidgit_carpet_timer`."""
+                return self._env.pidgit_carpet_timer
 
             @property
             def float_timer(self) -> int:
                 return self._env.float_timer
+
+            @property
+            def float_length(self) -> int:
+                return self._env.float_length
 
             @property
             def door_transition_timer(self) -> int:
@@ -604,11 +644,15 @@ class SuperMarioBros2Env(
     def semantic(self):
         """Semantic tile map from SemanticMapMixin.
 
+        Terrain and sprite objects occupy separate fields, so a cell can report
+        both -- e.g. solid ground with a door standing on it.
+
         Returns structured numpy array (15 x 16) with fields:
             - tile_id: Raw BackgroundTile ID
-            - fine_type: Fine-grained FineTileType (SOLID, ENEMY, etc.)
-            - coarse_type: Coarse-grained CoarseTileType (TERRAIN, ENEMY, etc.)
-            - color_r, color_g, color_b: RGB visualisation colour
+            - fine_type / coarse_type: the TERRAIN in this cell
+            - object_id: EnemyId of the sprite here, or NO_OBJECT (0xFF)
+            - object_fine_type / object_coarse_type: that sprite's classification
+            - color_r, color_g, color_b: RGB colour, object drawn over terrain
         """
         return self.semantic_map
 
@@ -619,12 +663,18 @@ class SuperMarioBros2Env(
         Returns:
             dict with organized game state using accessor objects
         """
+        # Derive the tensor from the map we already built: reading every tile
+        # from SRAM is the expensive part and must not happen twice per step.
+        semantic = self.semantic
+
         return {
             'pc': self.pc,
             'pos': self.pos,
             'game': self.game,
             'enemies': self.enemies,
-            'semantic': self.semantic,
+            'semantic': semantic,
+            'semantic_tensor': self.semantic_tensor_from(semantic),
+            'semantic_velocity': self.semantic_velocity_from(semantic),
         }
 
     def _detect_life_loss(self) -> bool:
@@ -666,11 +716,11 @@ class SuperMarioBros2Env(
             return action_to_buttons(int(action))
         elif self.action_type == "complex":
             if action >= len(COMPLEX_ACTIONS):
-                raise ValueError(f"Invalid action {action}. Must be 0-{len(COMPLEX_ACTIONS)-1}")
+                raise ValueError(f"Invalid action {action}. Must be 0-{len(COMPLEX_ACTIONS) - 1}")
             return actions_to_buttons(COMPLEX_ACTIONS[action])
         elif self.action_type == "simple":
             if action >= len(SIMPLE_ACTIONS):
-                raise ValueError(f"Invalid action {action}. Must be 0-{len(SIMPLE_ACTIONS)-1}")
+                raise ValueError(f"Invalid action {action}. Must be 0-{len(SIMPLE_ACTIONS) - 1}")
             return actions_to_buttons(SIMPLE_ACTIONS[action])
         else:
             raise ValueError('Action type not supported.')
@@ -749,6 +799,7 @@ class SuperMarioBros2Env(
         """Close the environment and clean up resources."""
         if hasattr(self, '_pygame_initialized') and self._pygame_initialized:
             import pygame
+
             pygame.quit()
             self._screen = None
             self._pygame_initialized = False

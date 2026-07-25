@@ -6,6 +6,7 @@ import numpy as np
 
 from .constants import Buttons
 
+
 ActionType = Literal["all", "complex", "simple"]
 
 SIMPLE_ACTIONS = [
@@ -53,7 +54,7 @@ BUTTON_MAP = {
     'down': Buttons.DOWN,
     'left': Buttons.LEFT,
     'right': Buttons.RIGHT,
-    'noop': None
+    'noop': None,
 }
 
 
@@ -106,7 +107,7 @@ def buttons_to_action(buttons: np.ndarray) -> int:
     action = 0
     for i in range(8):
         if buttons[i]:
-            action |= (1 << i)
+            action |= 1 << i
     return action
 
 
@@ -138,7 +139,7 @@ def buttons_to_action_index(buttons: np.ndarray, action_set: list[list[str]]) ->
 
     # Find matching action in the action set
     for i, action_combo in enumerate(action_set):
-        if set(pressed) == set([a for a in action_combo if a.upper() != 'NOOP']):
+        if set(pressed) == {a for a in action_combo if a.upper() != 'NOOP'}:
             return i
 
     return 0  # NOOP

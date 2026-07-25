@@ -4,21 +4,16 @@ import argparse
 import os
 import sys
 import traceback
-from typing import (
-    Optional,
-    Union,
-)
 
 import numpy as np
 import pygame
 
 from smb2_gym.app import InitConfig
-from smb2_gym.app.info_display import get_required_info_height
 from smb2_gym.app.keyboard import get_action_from_keyboard
-from smb2_gym.app.play_display import render_all
+from smb2_gym.app.layout import MIN_WINDOW
+from smb2_gym.app.play_display import PlayUI
 from smb2_gym.constants import (
     DEFAULT_SCALE,
-    FONT_SIZE_BASE,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
     WINDOW_CAPTION,
@@ -26,12 +21,25 @@ from smb2_gym.constants import (
 from smb2_gym.smb2_env import SuperMarioBros2Env
 
 
+# Space the sidebar and stats panels need alongside a game view of a given scale
+SIDEBAR_ALLOWANCE = 300
+STATS_ALLOWANCE = 250
+
+
+def _initial_window_size(scale: int) -> tuple[int, int]:
+    """Pick a starting window size that fits the game at `scale` plus the panels."""
+    width = SCREEN_WIDTH * scale + SIDEBAR_ALLOWANCE
+    height = SCREEN_HEIGHT * scale + STATS_ALLOWANCE
+    return max(width, MIN_WINDOW[0]), max(height, MIN_WINDOW[1])
+
+
 def _handle_events(
     env: SuperMarioBros2Env,
+    ui: PlayUI,
     paused: bool,
     game_over: bool,
 ) -> tuple[bool, bool, bool]:
-    """Handle pygame events.
+    """Handle pygame events, including window resizing and panel hotkeys.
 
     Returns:
         Tuple of (running, paused, game_over)
@@ -41,65 +49,60 @@ def _handle_events(
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+
+        elif event.type == pygame.VIDEORESIZE:
+            ui.handle_resize(event.w, event.h)
+
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            ui.handle_click(event.pos)
+
         elif event.type == pygame.KEYDOWN:
+            # The options menu takes keys first while it is open, so its
+            # letter shortcuts don't also trigger the panel toggles below.
+            if ui.handle_options_key(event.key):
+                continue
+
+            # Game controls
             if event.key == pygame.K_ESCAPE:
                 running = False
             elif event.key == pygame.K_p:
                 paused = not paused
+                ui.toast("Paused" if paused else "Resumed")
             elif event.key == pygame.K_r:
                 env.reset()
                 game_over = False
-                print("Game reset!")
+                ui.toast("Level reset")
             elif event.key == pygame.K_F5:
                 try:
                     env.save_state(0)
-                    print("State saved to save_state_0.sav")
+                    ui.toast("State saved to slot 0")
                 except Exception as e:
-                    print(f"Failed to save state: {e}")
+                    ui.toast(f"Save failed: {e}")
             elif event.key == pygame.K_F9:
                 try:
                     env.load_state(0)
-                    print("State loaded from save_state_0.sav")
+                    ui.toast("State loaded from slot 0")
                 except Exception as e:
-                    print(f"Failed to load state: {e}")
+                    ui.toast(f"Load failed: {e}")
+
+            # Interface controls
+            elif event.key in (pygame.K_F1, pygame.K_h):
+                ui.toggle_panel("help")
+            elif event.key == pygame.K_F2:
+                ui.toggle_options()
+            elif event.key == pygame.K_m:
+                ui.toggle_panel("semantic_map")
+            elif event.key == pygame.K_l:
+                ui.toggle_panel("legend")
+            elif event.key == pygame.K_i:
+                ui.toggle_panel("stats")
+            elif event.key == pygame.K_TAB:
+                mods = pygame.key.get_mods()
+                ui.next_tab(-1 if mods & pygame.KMOD_SHIFT else 1)
+            elif event.key == pygame.K_F11:
+                ui.toggle_fullscreen()
 
     return running, paused, game_over
-
-
-def _setup_pygame(
-    scale: int,
-) -> tuple[pygame.Surface, pygame.font.Font, pygame.font.Font, pygame.time.Clock, int, int, int,
-           int]:
-    """Setup pygame display, fonts, and clock.
-
-    Returns:
-        Tuple of (screen, font, small_font, clock, game_width, game_height, total_width, total_height)
-    """
-    pygame.init()
-
-    # Calculate dimensions
-    game_width = SCREEN_WIDTH * scale
-    game_height = SCREEN_HEIGHT * scale
-    semantic_map_width = 16 * 20  # 16 tiles * 20 pixels per tile
-    semantic_map_height = 15 * 20  # 15 tiles * 20 pixels per tile
-
-    total_width = game_width + semantic_map_width + 200  # Extra space for legend
-    total_height = max(game_height, semantic_map_height) + 100  # Extra space for info
-
-    # Create display
-    info_height = get_required_info_height(scale)
-    screen = pygame.display.set_mode((total_width, total_height + info_height))
-    pygame.display.set_caption(WINDOW_CAPTION)
-
-    # Create fonts
-    font_size = FONT_SIZE_BASE * scale // 2
-    font = pygame.font.Font(None, font_size)
-    small_font = pygame.font.Font(None, 16)
-
-    # Create clock
-    clock = pygame.time.Clock()
-
-    return screen, font, small_font, clock, game_width, game_height, total_width, total_height
 
 
 # ------------------------------------------------------------------------------
@@ -108,10 +111,10 @@ def _setup_pygame(
 
 
 def play_human(
-    level: Optional[str] = None,
-    character: Optional[Union[str, int]] = None,
-    custom_rom: Optional[str] = None,
-    custom_state: Optional[str] = None,
+    level: str | None = None,
+    character: str | int | None = None,
+    custom_rom: str | None = None,
+    custom_state: str | None = None,
     scale: int = DEFAULT_SCALE,
 ) -> None:
     """Play Super Mario Bros 2 with keyboard controls.
@@ -137,63 +140,57 @@ def play_human(
     # Create env
     env = SuperMarioBros2Env(init_config=config)
 
-    # Setup pygame
-    screen, font, small_font, clock, game_width, game_height, total_width, total_height = _setup_pygame(
-        scale
-    )
+    # Setup pygame and the resizable UI
+    pygame.init()
+    width, height = _initial_window_size(scale)
+    ui = PlayUI(width, height, caption=WINDOW_CAPTION)
+    clock = pygame.time.Clock()
 
     # Reset environment
     obs, info = env.reset()
 
-    # Game loop
+    print("\nPress F1 (or H) in the game window for the full controls list.")
+    ui.toast("Press F1 for controls")
+
     running = True
     paused = False
-
-    print("Controls:")
-    print("    Arrow Keys: Move")
-    print("    Z: A button (Jump)")
-    print("    X: B button (Pick up/Throw)")
-    print("    Enter: Start")
-    print("    Right Shift: Select")
-    print("    P: Pause")
-    print("    R: Reset")
-    print("    ESC: Quit")
-    print("\nSave State:")
-    print("    F5: Save state (creates save_state_0.sav)")
-    print("    F9: Load state (loads save_state_0.sav)")
-
     game_over = False
-    while running:
-        running, paused, game_over = _handle_events(env, paused, game_over)
 
-        if not paused and not game_over:
+    while running:
+        running, paused, game_over = _handle_events(env, ui, paused, game_over)
+
+        # A full-window overlay holds the game still. Otherwise it keeps running
+        # behind the overlay and the overlay's keys double as controller input -
+        # pressing S to toggle scaling would also be read as a button.
+        if not paused and not game_over and not ui.blocks_input:
             action = get_action_from_keyboard()
             obs, reward, terminated, truncated, info = env.step(np.int64(action))
 
+            if ui.settings.log_rewards:
+                print(f"step reward={reward:+.3f}  x={info['pos'].x_global}")
+
             if terminated or truncated:
                 if info.get('level_completed'):
-                    print("Level Completed! Continuing to next area...")
+                    ui.toast("Level complete — continuing")
                 else:
-                    print("Game Over! Press R (in game window) to reset or ESC to quit.")
+                    ui.toast("Game over — press R to reset")
                     game_over = True
 
-        render_all(
-            screen,
+        ui.render(
             obs,
             env,
             info,
-            game_width,
-            game_height,
-            total_width,
-            total_height,
-            font,
-            small_font,
-            paused,
+            paused=paused,
+            game_over=game_over,
+            fps=clock.get_fps(),
+            dt=clock.get_time() / 1000.0,
         )
 
-        # Update display
-        pygame.display.flip()
-        clock.tick(60)  # 60 FPS for human play
+        # 0 means uncapped; tick(0) would busy-wait, so skip the cap entirely.
+        if ui.settings.target_fps:
+            clock.tick(ui.settings.target_fps)
+        else:
+            clock.tick()
 
     env.close()
     pygame.quit()
@@ -221,7 +218,7 @@ def main() -> None:
              --custom-rom /path/to/rom.nes --custom-state /path/to/save.sav
 
         Only one initialisation mode can be used at a time.
-        """
+        """,
     )
 
     # Character/Level mode arguments
@@ -231,10 +228,7 @@ def main() -> None:
         help="Level to play (e.g., 1-1, 1-2)",
     )
     parser.add_argument(
-        "--char",
-        type=str,
-        choices=["mario", "luigi", "peach", "toad"],
-        help="Character to play as"
+        "--char", type=str, choices=["mario", "luigi", "peach", "toad"], help="Character to play as"
     )
 
     # Built-in ROM mode arguments
@@ -272,7 +266,7 @@ def main() -> None:
     parser.add_argument(
         "--no-save-state",
         action="store_true",
-        help="Start from beginning without loading save state"
+        help="Start from beginning without loading save state",
     )
 
     args = parser.parse_args()
@@ -282,7 +276,7 @@ def main() -> None:
         if args.custom_rom:
             config = InitConfig(
                 rom_path=args.custom_rom,
-                save_state_path=args.custom_state if not args.no_save_state else None
+                save_state_path=args.custom_state if not args.no_save_state else None,
             )
         elif args.rom:  # Built-in ROM variant mode
             # Construct paths for built-in ROM variants
@@ -344,10 +338,10 @@ def main() -> None:
             )
     except ValueError as e:
         parser.error(str(e))
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         traceback.print_exc()
         sys.exit(1)
-    except Exception as e:
+    except Exception:
         traceback.print_exc()
         sys.exit(1)
 

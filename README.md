@@ -10,10 +10,10 @@ A Gymnasium environment for Super Mario Bros 2 (Europe/Doki Doki Panic version) 
 - Curated action sets for faster training (`simple`, `complex`)
 - Comprehensive game state via info dict (50+ properties) and a semantic tile map
 - Multiple initialisation modes (character/level, custom ROMs, save states)
-- Human-playable interface with keyboard controls
+- Human-playable interface with a resizable GUI and keyboard controls
 - Up to 350+ and 750+ FPS rendered and non-rendered respectively
 
-![Example gameplay showing Luigi in level 1-2 with semantic tile map visualisation](assets/example-gameplay.png)
+![Example gameplay showing Mario in level 2-1 alongside the semantic tile map, colour legend and live game state panel](assets/example-gameplay.png)
 
 ## Installation
 
@@ -33,8 +33,8 @@ from smb2_gym.app import InitConfig
 config = InitConfig(level="1-1", character="luigi")
 env = SuperMarioBros2Env(
     init_config=config,
-    render_mode="human",     # "human" or None
-    action_type="simple"     # "simple" (12), "complex" (16), or "all" (256)
+    render_mode="human",  # "human" or None
+    action_type="simple",  # "simple" (12), "complex" (16), or "all" (256)
 )
 
 # Reset environment
@@ -69,7 +69,7 @@ config = InitConfig(rom="prg0", save_state="level_1_1.sav")
 # 3. Custom ROM mode
 config = InitConfig(
     rom_path="/path/to/your/smb2.nes",
-    save_state_path="/path/to/save.sav"  # Optional
+    save_state_path="/path/to/save.sav",  # Optional
 )
 ```
 
@@ -82,7 +82,9 @@ The `info` dict uses accessor objects for organized access to game state:
 info['pc'].lives
 info['pc'].hearts
 info['pc'].cherries
-info['pc'].character  # 0=Mario, 1=Luigi, 2=Peach, 3=Toad
+info['pc'].character  # 0=Mario, 1=Peach, 2=Toad, 3=Luigi
+info['pc'].speed  # Horizontal velocity (signed: +right, -left)
+info['pc'].y_velocity  # Vertical velocity (signed: -up, +falling)
 
 # Position
 info['pos'].x_global
@@ -98,7 +100,7 @@ info['game'].is_game_over
 # Enemies/Objects/Projectiles (all sprites: enemies, items, projectiles, doors, etc.)
 for enemy in info['enemies']:
     if enemy.is_visible:
-        enemy.object_type   # EnemyId enum (SHYGUY_RED, BULLET, HEART, MUSHROOM, etc.)
+        enemy.object_type  # EnemyId enum (SHYGUY_RED, BULLET, HEART, MUSHROOM, etc.)
         enemy.global_x
         enemy.global_y
         enemy.health
@@ -107,7 +109,18 @@ for enemy in info['enemies']:
 
 # Semantic tile map (15x16 structured array)
 info['semantic']
+
+# Episode status — always present, on reset and on every step
+info['life_lost']  # bool: a life was lost this step
+info['level_completed']  # bool: the level was finished
+info['game_over']  # bool: out of lives
+info['end_reason']  # None while running, otherwise one of:
+#   'level_completed' | 'game_over'
+#   'life_lost'       | 'max_steps'
 ```
+
+`terminated` is True for winning *and* for dying, so use `end_reason` to tell
+them apart when shaping rewards.
 
 ### Semantic Tile Map
 
@@ -121,15 +134,90 @@ for row in range(15):
     for col in range(16):
         tile = semantic_map[row, col]
 
-        tile_id = tile['tile_id']        # Raw BackgroundTile ID
-        fine_type = tile['fine_type']    # Fine-grained FineTileType (SOLID, CLIMBABLE, etc.)
-        coarse_type = tile['coarse_type'] # Coarse-grained CoarseTileType (TERRAIN, HAZARD, etc.)
+        tile_id = tile['tile_id']  # Raw BackgroundTile ID
+        fine_type = tile['fine_type']  # Fine-grained FineTileType (SOLID, CLIMBABLE, etc.)
+        coarse_type = tile['coarse_type']  # Coarse-grained CoarseTileType (TERRAIN, HAZARD, etc.)
 
         # RGB colour for visualisation
         r, g, b = tile['color_r'], tile['color_g'], tile['color_b']
 ```
 
 The semantic map provides a structured representation of the visible game world, useful for pathfinding, collision avoidance, and spatial reasoning in RL agents.
+
+#### Terrain and sprite objects are separate layers
+
+A cell can hold both terrain and a dynamic object — a subspace door standing on
+solid ground — so they occupy different fields. Sprites never overwrite the
+terrain beneath them, which is what distinguishes standing *on* a door from being
+*inside* it:
+
+```python
+from smb2_gym.constants import NO_OBJECT, CoarseTileType, FineTileType
+
+cell = semantic_map[row, col]
+
+cell['fine_type']  # the TERRAIN here (SOLID, PLATFORM, ...)
+cell['object_id']  # EnemyId of the sprite here, or NO_OBJECT (0xFF)
+cell['object_fine_type']  # that sprite's type (DOOR, ENEMY, COIN, ...)
+
+# Solid ground with something standing on it
+standing_on = (semantic_map['coarse_type'] == CoarseTileType.TERRAIN) & (
+    semantic_map['object_id'] != NO_OBJECT
+)
+```
+
+Objects are classified by type rather than lumped together: a subspace door reads
+as `DOOR`/`INTERACTIVE`, a coin as `COIN`/`COLLECTIBLE`, and only genuinely
+hostile objects as `ENEMY`. The same object classifies identically whether it came
+from the background tile map or a sprite slot — a POW block is `POW_BLOCK` either
+way. Unrecognised object ids fall back to `ENEMY`, since treating an unknown
+hazard as harmless is the more dangerous mistake.
+
+Object footprints are measured from the sprites actually being drawn, so oversized
+objects (a 1×3 Hawkmouth, a 1×2 Birdo) fill all the cells they occupy.
+
+#### Tensor view (for ML)
+
+`info['semantic_tensor']` is the same data as a binary `(15, 16, 16)` `uint8`
+array, suitable for feeding a conv net directly:
+
+```python
+tensor = info['semantic_tensor']  # (H, W, C) uint8, values in {0, 1}
+velocity = info['semantic_velocity']  # (H, W, 2) float32, normalised ~[-1, 1]
+
+from smb2_gym.constants import COARSE_TENSOR_CHANNEL_NAMES
+
+COARSE_TENSOR_CHANNEL_NAMES  # ('terrain:EMPTY', ..., 'object:DAMAGES', 'object:LIFTABLE')
+```
+
+Channels are binary masks rather than category ids — ids are nominal labels, and
+feeding them as numbers would imply `ENEMY` (15) is "more" than `SOLID` (1).
+Each coarse category appears twice, once per layer (14 channels). Within a layer
+the encoding is one-hot (exactly one terrain channel is always set); across layers
+it is multi-hot, so a door on solid ground sets both `terrain:TERRAIN` and
+`object:INTERACTIVE`.
+
+Two property channels follow: `object:DAMAGES` (touching this hurts) and
+`object:LIFTABLE` (can be picked up and thrown). These describe what happens on
+contact, which is the decision an agent actually makes about a sprite.
+
+**Velocity** is returned separately as float32, so the tensor stays a pure binary
+mask. Without it the map is a still frame — an agent cannot tell an enemy closing
+on it from one moving away. Positive X is rightward, positive Y is downward
+(matching row order). Concatenate if you want a single input array:
+
+```python
+combined = np.concatenate([tensor.astype(np.float32), velocity], axis=-1)  # (15, 16, 18)
+```
+
+PyTorch users want `tensor.transpose(2, 0, 1)` for `(C, H, W)`.
+
+Other per-object state — `direction`, `health`, `object_timer`, raw `sprite_flags`
+— stays in `info['enemies']` rather than becoming channels: it is useful for
+reward shaping and debugging, but mostly-constant channels cost input
+dimensionality without teaching a policy anything. Per-object `collision` is a
+runtime *result* (it reports what just happened, and is almost always zero), so it
+suits reward shaping rather than observation.
 
 **Note:** There is a plan to extend the semantic map or create a separate `collision_map` which has the collision properties for more detailed physical interaction information.
 
@@ -138,6 +226,7 @@ The semantic map provides a structured representation of the visible game world,
 ```python
 from smb2_gym import SuperMarioBros2Env
 from smb2_gym.app import InitConfig
+
 
 class CustomSMB2Env(SuperMarioBros2Env):
     def step(self, action):
@@ -158,6 +247,7 @@ class CustomSMB2Env(SuperMarioBros2Env):
 
         return obs, reward, terminated, truncated, info
 
+
 config = InitConfig(level="1-1", character="luigi")
 env = CustomSMB2Env(init_config=config, action_type="simple")
 ```
@@ -170,7 +260,7 @@ The package includes a human-playable interface with multiple initialisation mod
 ```bash
 smb2-play --level 1-1 --char luigi --scale 3
 
-smb2-play --level 2-3 --char peach 
+smb2-play --level 2-3 --char peach
 ```
 
 ### Built-in ROM Variant Mode
@@ -207,6 +297,32 @@ smb2-play --custom-rom /path/to/smb2.nes --no-save-state
 - F5: Save state
 - F9: Load state
 
+**Interface:**
+- F1 or H: Toggle the on-screen controls overlay
+- F2: Open the options menu
+- M: Toggle the semantic map panel
+- L: Toggle the legend panel
+- I: Toggle the stats panel
+- Tab / Shift+Tab: Cycle stats tabs (Overview, Player, Character, Enemies)
+- F11: Toggle fullscreen
+
+The window is resizable — the game view, semantic map and stats panels all
+reflow to fit, and the sidebar is dropped automatically on narrow windows so
+the game keeps usable space.
+
+### Options Menu
+
+Press **F2** for settings that can be changed mid-session. Use the arrow keys
+to select and change a row, click a row directly, or press its letter key.
+
+| Option | Key | Effect |
+| --- | --- | --- |
+| Frame rate | `-` / `+` | 15, 30, 60, 90, 120, 240 FPS or uncapped. Slow it down to study a jump, raise it to cross a level quickly |
+| Integer scaling | `S` | Snap the game view to a whole-number scale so every NES pixel is the same size, at the cost of a slightly smaller picture |
+| Collision overlay | `C` | Show the player's collision tiles on the semantic map |
+| Map grid | `G` | Grid lines between semantic map cells |
+| Log rewards | `O` | Print each step's reward to the terminal, useful when shaping a reward function |
+
 ### CLI Options
 
 **Character/Level Mode:**
@@ -224,6 +340,32 @@ smb2-play --custom-rom /path/to/smb2.nes --no-save-state
 
 **Display:**
 - `--scale`: Display scale factor (1-4, default: 3)
+
+## Development
+
+This project uses [uv](https://docs.astral.sh/uv/) for dependency management and
+[ruff](https://docs.astral.sh/ruff/) for linting and formatting.
+
+```bash
+# Set up the environment (creates .venv and installs everything)
+uv sync --extra dev
+
+# Install the git hooks, so lint and formatting run on each commit
+uv run pre-commit install
+
+# Run the test suite ('-m "not slow"' skips the long emulator runs)
+uv run pytest -m "not slow"
+
+# Lint and format by hand
+uv run ruff check --fix .
+uv run ruff format .
+
+# Run every hook over the whole repo
+uv run pre-commit run --all-files
+```
+
+CI runs the linters, the test suite on Python 3.10-3.13, and a packaging check
+on every push and pull request.
 
 ## Disclaimer
 

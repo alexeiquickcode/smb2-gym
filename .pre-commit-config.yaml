@@ -1,0 +1,39 @@
+# Run on everything with: pre-commit run --all-files
+#
+# The ROM and save states under smb2_gym/_nes are binary fixtures the test suite
+# needs, so they are excluded from the text hooks rather than mangled by them.
+exclude: '^(smb2_gym/_nes/|assets/|build/)'
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        # The ROM (~1.5MB) is already committed; this catches new stray blobs.
+        args: [--maxkb=2048]
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: debug-statements  # no stray breakpoint()/pdb in a released package
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.0
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.11.32
+    hooks:
+      - id: uv-lock  # keep uv.lock in step with pyproject.toml
+
+  # Tests are not a pre-commit hook: the suite drives a real emulator and takes
+  # ~20s, which is too slow for every commit. CI runs it on push instead.
